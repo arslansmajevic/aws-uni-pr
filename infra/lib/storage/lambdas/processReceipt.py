@@ -18,7 +18,6 @@ def now_iso():
 
 
 def update_status(user_id, receipt_id, status, extra_fields=None):
-    """Ažurira samo status i updatedAt u DynamoDB."""
     update_expr = "SET processingStatus = :s, updatedAt = :u"
     expr_values = {":s": status, ":u": now_iso()}
 
@@ -36,10 +35,6 @@ def update_status(user_id, receipt_id, status, extra_fields=None):
 
 
 def extract_receipt_data(bucket, key):
-    """
-    Poziva Textract analyze_expense — API specijalizovan za račune.
-    Vraća strukturirani dict sa svim poljima koje smo pronašli.
-    """
     response = textract.analyze_expense(
         Document={"S3Object": {"Bucket": bucket, "Name": key}}
     )
@@ -112,10 +107,6 @@ CATEGORIES = ["Groceries", "Dining", "Entertainment", "Transport",
                "Health", "Shopping", "Utilities", "Other"]
 
 def categorize_receipt(extracted):
-    """
-    Šalje ekstrahovane podatke Claude Haiku modelu.
-    Vraća jednu od predefinisanih kategorija.
-    """
     merchant = extracted.get("merchantName") or "Unknown"
     items_text = ", ".join(
         i.get("description", "") for i in extracted.get("lineItems", []) if i.get("description")
