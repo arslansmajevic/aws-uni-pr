@@ -11,7 +11,7 @@
     "cdk": "cdklocal",
     "synth": "cdklocal synth",
     "deploy": "cdklocal deploy --all",
-    "destroy": "cdklocal destroy InfraStack",
+    "destroy": "cdklocal destroy --all",
     "bootstrap": "cdklocal bootstrap"
   },
   "devDependencies": {

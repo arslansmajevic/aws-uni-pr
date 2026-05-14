@@ -3,6 +3,7 @@ import { Construct } from 'constructs';
 import { StorageConstruct } from './storage/storage-construct';
 import { GatewayConstruct } from './gateway/gateway-construct';
 import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
+import { AuthenticationConstruct } from './authentication/authentication-construct';
 
 export class InfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -10,11 +11,41 @@ export class InfraStack extends cdk.Stack {
     
     var storageConstruct = new StorageConstruct(this, "ReceiptStorage");
     var gatewayConstruct = new GatewayConstruct(this, "ApiGateway");
+    var authenticationConstruct = new AuthenticationConstruct(this, "Authentication");
 
-    gatewayConstruct.addRoute(
-      "/images",
-      "POST",
-      new LambdaIntegration(storageConstruct.uploadImageLambda),
+    const jwtRequiredFlag = true;
+
+    gatewayConstruct.addLambdaRoutes(
+      [
+        {
+          function: storageConstruct.uploadImageLambda,
+          method: "POST",
+          resourcePath: "image",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: authenticationConstruct.registerLambda,
+          method: "POST",
+          resourcePath: "register",
+        },
+        {
+          function: authenticationConstruct.loginLambda,
+          method: "POST",
+          resourcePath: "login",
+        },
+        {
+          function: authenticationConstruct.refreshTokenLambda,
+          method: "POST",
+          resourcePath: "refresh",
+        },
+        {
+          function: authenticationConstruct.listUsersLambda,
+          method: "GET",
+          resourcePath: "users",
+          jwtRequired: jwtRequiredFlag,
+        },
+      ],
+      authenticationConstruct.authorizer,
     );
 
     new cdk.CfnOutput(this, "ApiUrl", {
