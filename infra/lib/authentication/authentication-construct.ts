@@ -3,6 +3,7 @@ import { CognitoUserPoolsAuthorizer } from "aws-cdk-lib/aws-apigateway";
 import { UserPool, UserPoolClient } from "aws-cdk-lib/aws-cognito";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
 import { Bucket, HttpMethods } from "aws-cdk-lib/aws-s3";
+import { PolicyStatement } from "aws-cdk-lib/aws-iam"; 
 import { Construct } from "constructs";
 import * as path from "path";
 
@@ -53,9 +54,15 @@ export class AuthenticationConstruct extends Construct {
       },
     });
 
-    this.userPool.grant(this.registerLambda, "cognito-idp:SignUp");
-    this.userPool.grant(this.registerLambda, "cognito-idp:AdminCreateUser");
-    this.userPool.grant(this.registerLambda, "cognito-idp:AdminConfirmSignUp");
+    this.registerLambda.addToRolePolicy(new PolicyStatement({
+      actions: [
+        "cognito-idp:SignUp",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminConfirmSignUp",
+      ],
+      resources: ["*"],
+    }));
+
 
     this.loginLambda = new Function(this, "LoginUserLambda", {
       runtime: Runtime.PYTHON_3_12,
@@ -67,7 +74,10 @@ export class AuthenticationConstruct extends Construct {
       },
     });
 
-    this.userPool.grant(this.loginLambda, "cognito-idp:InitiateAuth");
+    this.loginLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["cognito-idp:InitiateAuth"],
+      resources: ["*"],
+    }));
 
     this.listUsersLambda = new Function(this, "ListUsersLambda", {
       runtime: Runtime.PYTHON_3_12,
@@ -77,6 +87,11 @@ export class AuthenticationConstruct extends Construct {
         USER_POOL_ID: this.userPool.userPoolId,
       },
     });
+
+    this.listUsersLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["cognito-idp:ListUsers"],
+      resources: ["*"],
+    }));
 
     this.refreshTokenLambda = new Function(this, "RefreshTokenLambda", {
       runtime: Runtime.PYTHON_3_12,
@@ -88,18 +103,14 @@ export class AuthenticationConstruct extends Construct {
       },
     });
 
-    this.userPool.grant(this.refreshTokenLambda, "cognito-idp:InitiateAuth");
+    this.refreshTokenLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["cognito-idp:InitiateAuth"],
+      resources: ["*"],
+    }));
 
-    // 1. Create the Authorizer
-    // used for checking JWT tokens in API Gateway
-    this.authorizer = new CognitoUserPoolsAuthorizer(
-      this,
-      "CognitoAuthorizer",
-      {
-        cognitoUserPools: [this.userPool],
-      },
-    );
+    this.authorizer = new CognitoUserPoolsAuthorizer(this, "CognitoAuthorizer", {
+      cognitoUserPools: [this.userPool],
+    });
 
-    this.userPool.grant(this.listUsersLambda, "cognito-idp:ListUsers");
   }
 }

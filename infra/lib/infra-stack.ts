@@ -44,6 +44,11 @@ export class InfraStack extends cdk.Stack {
           resourcePath: "users",
           jwtRequired: jwtRequiredFlag,
         },
+        { function: storageConstruct.getReceiptsLambda,     
+           method: "GET",  
+           resourcePath: "receipts", 
+           jwtRequired: jwtRequiredFlag,
+        }, 
       ],
       authenticationConstruct.authorizer,
     );
