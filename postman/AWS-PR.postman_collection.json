@@ -1,9 +1,10 @@
 {
   "info": {
-    "_postman_id": "1ea4cea7-0341-4d0a-bb69-2205c9c6ddfe",
+    "_postman_id": "df718466-7ea1-4a21-9434-39cbeb1abc00",
     "name": "AWS-PR",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "26255378"
+    "_exporter_id": "54845176",
+    "_collection_link": "https://go.postman.co/collection/54845176-df718466-7ea1-4a21-9434-39cbeb1abc00?source=collection_link"
   },
   "item": [
     {
@@ -90,6 +91,63 @@
           "raw": "{{backendUrl}}users",
           "host": [
             "{{backendUrl}}users"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Upload Receipt",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "",
+            "type": "text"
+          },
+          {
+            "key": "Authorization",
+            "value": "eyJraWQiOiJZNWhCcU9sWTM4YTAyOFZxZlBxWHVNNTBGckxoajZFd0J2cDJiUWF0cjJJPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiI3NGI4NjQyOC0xMDIxLTcwMDEtMjU3Yi0zMDdlN2Q4MGFkMWEiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImlzcyI6Imh0dHBzOlwvXC9jb2duaXRvLWlkcC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbVwvdXMtZWFzdC0xX3IwWDkxUnl4TCIsImNvZ25pdG86dXNlcm5hbWUiOiI3NGI4NjQyOC0xMDIxLTcwMDEtMjU3Yi0zMDdlN2Q4MGFkMWEiLCJnaXZlbl9uYW1lIjoiQXJzbGFuIiwib3JpZ2luX2p0aSI6ImIzZjE4NjA1LWE4NjQtNDllNi1hOWViLTNiZTY4MjVhYzgxOCIsImF1ZCI6IjY0ZDJxOTdpMzAzbWZsdTRsOTZnZ3UxM2QzIiwiZXZlbnRfaWQiOiI5ZjcxZWY3ZC00ODc0LTQxOTQtYjg2YS1hZTgxNmUyOWYyZWUiLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTc3ODg2MTQ2NiwiZXhwIjoxNzc4ODY1MDY2LCJpYXQiOjE3Nzg4NjE0NjYsImZhbWlseV9uYW1lIjoiU21hamV2aWMiLCJqdGkiOiI1MTc1ZjYwNy00ZjUxLTQyZjEtODZlYy00YTg5NmRhNmYyMTUiLCJlbWFpbCI6ImFyc2xhbi5zbWFqZXZpY0BnbWFpbC5jb20ifQ.QVeTuMyPor-1uBis_T7nz-WOuVFvG8P2gPtM3JmqFSx7t6MKVUEjAS0JL4hWU13RnqR8ct0lEZ51d5pZZz01LFuX7l_BWcAbRrcYs-PNs7didGNro47jXlExFUi81kSeZYT3mDh5zvaTxfvHxW7rmAeIPyeJ-9-EF-hlmRsc21g4Tqjyf3BHV6l6csWjWX5yZ5qeHWCwtikAGCp8zKP2V5WaDjZgpW4Ujh-GipGY5UhsNp8D1PaiH01TkE5UfvMTHe9s6C2jN1uM1-iSwPcrpRa1WAAcVYDtzysaegwkMAFR7uFI9wYn9KMen6PcZqq-ABW7BakeAXaMFjbeQxgBoQ",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"fileName\": \"receipt.jpg\",\n    \"contentType\": \"image/jpeg\",\n    \"imageBase64\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{backendUrl}}image",
+          "host": [
+            "{{backendUrl}}image"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Receipts",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "eyJraWQiOiJZNWhCcU9sWTM4YTAyOFZxZlBxWHVNNTBGckxoajZFd0J2cDJiUWF0cjJJPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiI3NGI4NjQyOC0xMDIxLTcwMDEtMjU3Yi0zMDdlN2Q4MGFkMWEiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImlzcyI6Imh0dHBzOlwvXC9jb2duaXRvLWlkcC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbVwvdXMtZWFzdC0xX3IwWDkxUnl4TCIsImNvZ25pdG86dXNlcm5hbWUiOiI3NGI4NjQyOC0xMDIxLTcwMDEtMjU3Yi0zMDdlN2Q4MGFkMWEiLCJnaXZlbl9uYW1lIjoiQXJzbGFuIiwib3JpZ2luX2p0aSI6ImIzZjE4NjA1LWE4NjQtNDllNi1hOWViLTNiZTY4MjVhYzgxOCIsImF1ZCI6IjY0ZDJxOTdpMzAzbWZsdTRsOTZnZ3UxM2QzIiwiZXZlbnRfaWQiOiI5ZjcxZWY3ZC00ODc0LTQxOTQtYjg2YS1hZTgxNmUyOWYyZWUiLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTc3ODg2MTQ2NiwiZXhwIjoxNzc4ODY1MDY2LCJpYXQiOjE3Nzg4NjE0NjYsImZhbWlseV9uYW1lIjoiU21hamV2aWMiLCJqdGkiOiI1MTc1ZjYwNy00ZjUxLTQyZjEtODZlYy00YTg5NmRhNmYyMTUiLCJlbWFpbCI6ImFyc2xhbi5zbWFqZXZpY0BnbWFpbC5jb20ifQ.QVeTuMyPor-1uBis_T7nz-WOuVFvG8P2gPtM3JmqFSx7t6MKVUEjAS0JL4hWU13RnqR8ct0lEZ51d5pZZz01LFuX7l_BWcAbRrcYs-PNs7didGNro47jXlExFUi81kSeZYT3mDh5zvaTxfvHxW7rmAeIPyeJ-9-EF-hlmRsc21g4Tqjyf3BHV6l6csWjWX5yZ5qeHWCwtikAGCp8zKP2V5WaDjZgpW4Ujh-GipGY5UhsNp8D1PaiH01TkE5UfvMTHe9s6C2jN1uM1-iSwPcrpRa1WAAcVYDtzysaegwkMAFR7uFI9wYn9KMen6PcZqq-ABW7BakeAXaMFjbeQxgBoQ",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{backendUrl}}receipts",
+          "host": [
+            "{{backendUrl}}receipts"
           ]
         }
       },

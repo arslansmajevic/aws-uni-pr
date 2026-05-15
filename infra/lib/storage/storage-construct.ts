@@ -22,7 +22,7 @@ export class StorageConstruct extends Construct {
     super(scope, id);
 
     this.bucket = new Bucket(this, id, {
-      bucketName: "receipt-storage-bucket",
+      // bucketName: "receipt-storage-bucket",
       encryption: BucketEncryption.S3_MANAGED,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
