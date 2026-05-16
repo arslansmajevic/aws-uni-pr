@@ -1,21 +1,22 @@
 import os
 import json
 import boto3
+import base64
+import urllib.request
+from difflib import SequenceMatcher
+from datetime import timedelta, date
 from datetime import datetime, timezone
 
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(os.environ["RECEIPTS_TABLE_NAME"])
+s3_client = boto3.client("s3")
+bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
-textract = boto3.client("textract")
-bedrock = boto3.client("bedrock-runtime")
-
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-haiku-4-5")
-
-
+BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
+CATEGORIES = ["Groceries", "Dining", "Entertainment", "Transport", "Health", "Shopping", "Utilities", "Other"]
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
-
 
 def update_status(user_id, receipt_id, status, extra_fields=None):
     update_expr = "SET processingStatus = :s, updatedAt = :u"
@@ -34,114 +35,140 @@ def update_status(user_id, receipt_id, status, extra_fields=None):
 
 
 
-def extract_receipt_data(bucket, key):
-    response = textract.analyze_expense(
-        Document={"S3Object": {"Bucket": bucket, "Name": key}}
+def get_plaid_transactions(user_id, receipt_date):
+    secrets_client = boto3.client("secretsmanager")
+
+    try:
+        secret = secrets_client.get_secret_value(
+            SecretId=f"plaid/access-token/{user_id}"
+        )
+        token_data = json.loads(secret["SecretString"])
+    except Exception:
+        print(f"No bank connected for user {user_id}")
+        return []
+
+    creds_secret = secrets_client.get_secret_value(SecretId="plaid/credentials")
+    creds = json.loads(creds_secret["SecretString"])
+
+    PLAID_URLS = {"sandbox": "https://sandbox.plaid.com", "production": "https://production.plaid.com"}
+    base_url = PLAID_URLS.get(token_data.get("env", "sandbox"), PLAID_URLS["sandbox"])
+
+    try:
+        center = datetime.strptime(receipt_date, "%Y-%m-%d").date() if receipt_date else date.today()
+    except Exception:
+        center = date.today()
+
+    payload = json.dumps({
+        "client_id": creds["clientId"],
+        "secret": creds["secret"],
+        "access_token": token_data["accessToken"],
+        "start_date": (center - timedelta(days=3)).isoformat(),
+        "end_date": (center + timedelta(days=3)).isoformat(),
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"{base_url}/transactions/get",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
 
-    result = {
-        "merchantName": None,
-        "receiptDate": None,
-        "receiptTime": None,
-        "totalAmount": None,
-        "subtotalAmount": None,
-        "taxAmount": None,
-        "tipAmount": None,
-        "currency": None,
-        "lineItems": [],
-        "rawText": "",
-    }
+    with urllib.request.urlopen(req) as resp:
+        result = json.loads(resp.read())
 
-    for doc in response.get("ExpenseDocuments", []):
-
-        for field in doc.get("SummaryFields", []):
-            field_type = field.get("Type", {}).get("Text", "")
-            value = field.get("ValueDetection", {}).get("Text", "")
-
-            if not value:
-                continue
-
-            mapping = {
-                "VENDOR_NAME":            "merchantName",
-                "INVOICE_RECEIPT_DATE":   "receiptDate",
-                "TIME":                   "receiptTime",
-                "TOTAL":                  "totalAmount",
-                "SUBTOTAL":               "subtotalAmount",
-                "TAX":                    "taxAmount",
-                "GRATUITY":               "tipAmount",
-                "CURRENCY":               "currency",
-            }
-
-            if field_type in mapping:
-                result[mapping[field_type]] = value
-
-        for group in doc.get("LineItemGroups", []):
-            for line in group.get("LineItems", []):
-                item = {}
-                for field in line.get("LineItemExpenseFields", []):
-                    field_type = field.get("Type", {}).get("Text", "")
-                    value = field.get("ValueDetection", {}).get("Text", "")
-                    if field_type == "ITEM":
-                        item["description"] = value
-                    elif field_type == "PRICE":
-                        item["totalPrice"] = value
-                    elif field_type == "QUANTITY":
-                        item["quantity"] = value
-                if item:
-                    result["lineItems"].append(item)
-
-    blocks = textract.detect_document_text(
-        Document={"S3Object": {"Bucket": bucket, "Name": key}}
-    )
-    result["rawText"] = " ".join(
-        b.get("Text", "")
-        for b in blocks.get("Blocks", [])
-        if b.get("BlockType") == "LINE"
-    )
-
-    return result
+    return result.get("transactions", [])
 
 
+def match_transaction(extracted, transactions):
+    if not transactions:
+        return "UNMATCHED", 0.0, None
 
-CATEGORIES = ["Groceries", "Dining", "Entertainment", "Transport",
-               "Health", "Shopping", "Utilities", "Other"]
+    try:
+        receipt_amount = float(
+            str(extracted.get("totalAmount") or "0")
+            .replace(",", ".")
+            .replace("CHF", "")
+            .replace("$", "")
+            .replace("€", "")
+            .strip()
+        )
+    except (ValueError, TypeError):
+        return "UNMATCHED", 0.0, None
 
-def categorize_receipt(extracted):
-    merchant = extracted.get("merchantName") or "Unknown"
-    items_text = ", ".join(
-        i.get("description", "") for i in extracted.get("lineItems", []) if i.get("description")
-    ) or "N/A"
-    raw = (extracted.get("rawText") or "")[:500] # max 500 chars of raw text to avoid hitting token limits
+    receipt_merchant = (extracted.get("merchantName") or "").lower()
+    best_match, best_score = None, 0.0
 
-    prompt = f"""You are a receipt categorization assistant.
-                Categorize this receipt into EXACTLY ONE of these categories:
-                {", ".join(CATEGORIES)}
+    for txn in transactions:
+        txn_amount = abs(float(txn.get("amount", 0)))
+        txn_name = (txn.get("merchant_name") or txn.get("name") or "").lower()
 
-                Receipt details:
-                - Merchant: {merchant}
-                - Items: {items_text}
-                - Raw text snippet: {raw}
+        if receipt_amount > 0 and abs(txn_amount - receipt_amount) / receipt_amount > 0.01:
+            continue
 
-                Reply with ONLY the category name, nothing else."""
+        name_score = SequenceMatcher(None, receipt_merchant, txn_name).ratio()
+        confidence = 0.6 + (name_score * 0.4)
 
-    response = bedrock.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
-        body=json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 10,
-            "messages": [{"role": "user", "content": prompt}],
-        }),
-    )
+        if confidence > best_score:
+            best_score, best_match = confidence, txn
 
-    body = json.loads(response["body"].read())
-    category = body["content"][0]["text"].strip()
+    if best_match and best_score >= 0.6:
+        status = "MATCHED"
+    elif best_match and best_score >= 0.4:
+        status = "POSSIBLE_MATCH"
+    else:
+        status = "UNMATCHED"
 
-    if category not in CATEGORIES:
-        print(f"Unexpected category from Bedrock: '{category}', defaulting to 'Other'")
-        category = "Other"
+    return status, round(best_score, 2), best_match
 
-    return category
 
+def process_image_with_bedrock(bucket, key):
+    response = s3_client.get_object(Bucket=bucket, Key=key)
+    image_bytes = response['Body'].read()
+    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+    image_format = get_image_format(image_bytes)
+
+    prompt = f"""Analyze this receipt image and extract details.
+    Categorize into EXACTLY ONE of: {', '.join(CATEGORIES)}.
+    Return ONLY valid JSON, no markdown:
+    {{"merchantName": "string or null", "receiptDate": "string or null",
+      "receiptTime": "string or null", "totalAmount": "string or null",
+      "subtotalAmount": "string or null", "taxAmount": "string or null",
+      "tipAmount": "string or null", "currency": "string or null",
+      "category": "string",
+      "lineItems": [{{"description": "string", "totalPrice": "string", "quantity": "string"}}]}}"""
+
+    body = json.dumps({
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"image": {"format": image_format, "source": {"bytes": image_base64}}},  
+                {"text": prompt}
+            ]
+        }],
+        "inferenceConfig": {"max_new_tokens": 1000}
+    })
+
+    bedrock_response = bedrock.invoke_model(modelId=BEDROCK_MODEL_ID, body=body)
+    response_body = json.loads(bedrock_response["body"].read())
+    
+    extracted_text = response_body["output"]["message"]["content"][0]["text"].strip()
+
+    if extracted_text.startswith("```"):
+        extracted_text = extracted_text.split("```")[1]
+        if extracted_text.startswith("json"):
+            extracted_text = extracted_text[4:]
+        extracted_text = extracted_text.strip()
+
+    return json.loads(extracted_text)
+
+def get_image_format(image_bytes):
+    if image_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'png'
+    elif image_bytes[:2] in (b'\xff\xd8',):
+        return 'jpeg'
+    elif image_bytes[:4] == b'RIFF' and image_bytes[8:12] == b'WEBP':
+        return 'webp'
+    return 'jpeg'
 
 
 def handler(event, context):
@@ -153,37 +180,39 @@ def handler(event, context):
 
         parts = key.split("/")
         if len(parts) < 4:
-            print(f"Skipping unexpected key format: {key}")
             continue
 
         user_id = parts[1]
         receipt_id = parts[2]
 
         update_status(user_id, receipt_id, "PROCESSING")
-        print(f"Status → PROCESSING")
 
         try:
-            print("Calling Textract...")
-            extracted = extract_receipt_data(bucket, key)
-            print(f"Textract done. Merchant: {extracted.get('merchantName')}, Total: {extracted.get('totalAmount')}")
+            extracted_data = process_image_with_bedrock(bucket, key)
+            
+            if extracted_data.get("category") not in CATEGORIES:
+                extracted_data["category"] = "Other"
 
-            print("Calling Bedrock...")
-            category = categorize_receipt(extracted)
-            print(f"Bedrock category: {category}")
+            transactions = get_plaid_transactions(
+                user_id, extracted_data.get("receiptDate")
+            )
+            match_status, confidence, matched_txn = match_transaction(
+                extracted_data, transactions
+            )
+            print(f"Match: {match_status} (confidence: {confidence})")
 
-            update_status(user_id, receipt_id, "CATEGORIZED", extra_fields={
-                "merchantName":    extracted.get("merchantName"),
-                "receiptDate":     extracted.get("receiptDate"),
-                "receiptTime":     extracted.get("receiptTime"),
-                "totalAmount":     extracted.get("totalAmount"),
-                "subtotalAmount":  extracted.get("subtotalAmount"),
-                "taxAmount":       extracted.get("taxAmount"),
-                "tipAmount":       extracted.get("tipAmount"),
-                "currency":        extracted.get("currency"),
-                "lineItems":       extracted.get("lineItems", []),
-                "category":        category,
-            })
-            print(f"Status → CATEGORIZED ✓")
+            match_fields = {
+                "transactionMatchStatus": match_status,
+                "matchConfidence": str(confidence),
+            }
+            if matched_txn:
+                match_fields["matchedTransactionId"]   = matched_txn.get("transaction_id", "")
+                match_fields["matchedTransactionName"] = matched_txn.get("name", "")
+                match_fields["matchedAmount"]          = str(abs(matched_txn.get("amount", 0)))
+                match_fields["matchedDate"]            = matched_txn.get("date", "")
+
+            final_data = {**extracted_data, **match_fields}
+            update_status(user_id, receipt_id, match_status, extra_fields=final_data)
 
         except Exception as e:
             print(f"Error processing {key}: {str(e)}")

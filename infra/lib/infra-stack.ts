@@ -4,6 +4,7 @@ import { StorageConstruct } from './storage/storage-construct';
 import { GatewayConstruct } from './gateway/gateway-construct';
 import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
 import { AuthenticationConstruct } from './authentication/authentication-construct';
+import { BankingConstruct } from './banking/banking-constructs';
 
 export class InfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -12,6 +13,7 @@ export class InfraStack extends cdk.Stack {
     var storageConstruct = new StorageConstruct(this, "ReceiptStorage");
     var gatewayConstruct = new GatewayConstruct(this, "ApiGateway");
     var authenticationConstruct = new AuthenticationConstruct(this, "Authentication");
+    var bankingConstruct = new BankingConstruct(this, "Banking");
 
     const jwtRequiredFlag = true;
 
@@ -49,6 +51,16 @@ export class InfraStack extends cdk.Stack {
            resourcePath: "receipts", 
            jwtRequired: jwtRequiredFlag,
         }, 
+        { function: bankingConstruct.createLinkTokenLambda, 
+          method: "POST", 
+          resourcePath: "bank/connect",  
+          jwtRequired: jwtRequiredFlag,
+        },
+        { function: bankingConstruct.exchangeTokenLambda,   
+          method: "POST", 
+          resourcePath: "bank/exchange", 
+          jwtRequired: jwtRequiredFlag 
+        },
       ],
       authenticationConstruct.authorizer,
     );

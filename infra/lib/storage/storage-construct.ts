@@ -1,4 +1,4 @@
-import { RemovalPolicy } from "aws-cdk-lib";
+import { Duration, RemovalPolicy } from "aws-cdk-lib";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
 import {
   Bucket,
@@ -22,7 +22,6 @@ export class StorageConstruct extends Construct {
     super(scope, id);
 
     this.bucket = new Bucket(this, id, {
-      // bucketName: "receipt-storage-bucket",
       encryption: BucketEncryption.S3_MANAGED,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
@@ -52,9 +51,10 @@ export class StorageConstruct extends Construct {
       runtime: Runtime.PYTHON_3_12,
       handler: "processReceipt.handler",
       code: Code.fromAsset(path.join(__dirname, "lambdas")),
+      timeout: Duration.seconds(30),
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
-        BEDROCK_MODEL_ID: "anthropic.claude-haiku-4-5",
+        BEDROCK_MODEL_ID: "amazon.nova-lite-v1:0",
       },
     });
 
@@ -90,5 +90,11 @@ export class StorageConstruct extends Construct {
       actions: ["bedrock:InvokeModel"],
       resources: ["*"],
     }));
+
+    processReceiptLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["secretsmanager:GetSecretValue"],
+      resources: ["*"],
+    }));
+    
   }
 }
