@@ -64,14 +64,6 @@ def handler(event, context):
             method="POST",
         )
 
-<<<<<<< Updated upstream
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-
-        access_token = result["access_token"]
-
-        secret_name = f"plaid/access-token/{user_id}"
-=======
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -102,17 +94,13 @@ def handler(event, context):
         access_token = result["access_token"]
         secret_name = f"plaid/access-token/{user_id}"
 
->>>>>>> Stashed changes
         try:
             secrets.create_secret(
                 Name=secret_name,
                 SecretString=json.dumps({
                     "accessToken": access_token,
                     "env": creds["env"],
-<<<<<<< Updated upstream
-=======
                     "connectedAt": datetime.now(timezone.utc).isoformat(),
->>>>>>> Stashed changes
                 }),
             )
         except secrets.exceptions.ResourceExistsException:
@@ -121,17 +109,6 @@ def handler(event, context):
                 SecretString=json.dumps({
                     "accessToken": access_token,
                     "env": creds["env"],
-<<<<<<< Updated upstream
-                }),
-            )
-
-        print(f"Bank connected for user: {user_id}")
-        return http_response(200, {"message": "Bank account connected successfully"})
-
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return http_response(500, {"message": str(e)})
-=======
                     "connectedAt": datetime.now(timezone.utc).isoformat(),
                 }),
             )
@@ -143,4 +120,3 @@ def handler(event, context):
     except Exception as e:
         print(f"Error: {str(e)}")
         return http_response(500, {"message": "Internal server error"})
->>>>>>> Stashed changes

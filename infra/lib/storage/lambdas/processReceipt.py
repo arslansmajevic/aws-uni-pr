@@ -62,13 +62,8 @@ def get_plaid_transactions(user_id, receipt_date):
         "client_id": creds["clientId"],
         "secret": creds["secret"],
         "access_token": token_data["accessToken"],
-<<<<<<< Updated upstream
-        "start_date": (center - timedelta(days=3)).isoformat(),
-        "end_date": (center + timedelta(days=3)).isoformat(),
-=======
         "start_date": (center - timedelta(days=90)).isoformat(),
         "end_date": (center + timedelta(days=90)).isoformat(),
->>>>>>> Stashed changes
     }).encode("utf-8")
 
     req = urllib.request.Request(
