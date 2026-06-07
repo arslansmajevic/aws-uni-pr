@@ -1,5 +1,6 @@
 import { Duration, RemovalPolicy } from "aws-cdk-lib";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Key } from "aws-cdk-lib/aws-kms";
 import {
   Bucket,
   BucketEncryption,
@@ -17,22 +18,41 @@ export class StorageConstruct extends Construct {
   public readonly receiptsTable: Table;
   public readonly uploadImageLambda: Function;
   public readonly getReceiptsLambda: Function;
+  public readonly getReceiptLambda: Function;
+  public readonly deleteReceiptLambda: Function;
+  public readonly getReceiptsSummaryLambda: Function;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
+    const receiptEncryptionKey = new Key(this, "ReceiptEncryptionKey", {
+      description: "KMS key for encrypting receipt images and extracted data",
+      enableKeyRotation: true,        
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     this.bucket = new Bucket(this, id, {
-      encryption: BucketEncryption.S3_MANAGED,
+      encryptionKey: receiptEncryptionKey,         
+      encryption: BucketEncryption.KMS,   
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      lifecycleRules: [
+        {
+          id: "DeleteReceiptImagesAfter90Days",
+          enabled: true,
+          expiration: Duration.days(90),
+          prefix: "uploads/",     
+        },
+      ],
     });
 
     this.receiptsTable = new Table(this, "ReceiptsTable", {
       partitionKey: { name: "userId", type: AttributeType.STRING },
       sortKey: { name: "receiptId", type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      encryptionKey: receiptEncryptionKey,
       removalPolicy: RemovalPolicy.DESTROY, 
     });
 
@@ -96,5 +116,36 @@ export class StorageConstruct extends Construct {
       resources: ["*"],
     }));
     
+    this.getReceiptLambda = new Function(this, "GetReceiptLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "getReceipt.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+      environment: {
+        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+      },
+    });
+    this.receiptsTable.grantReadData(this.getReceiptLambda);
+
+    this.deleteReceiptLambda = new Function(this, "DeleteReceiptLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "deleteReceipt.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+      environment: {
+        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+        BUCKET_NAME: this.bucket.bucketName,
+      },
+    });
+    this.receiptsTable.grantReadWriteData(this.deleteReceiptLambda);
+    this.bucket.grantDelete(this.deleteReceiptLambda);
+
+    this.getReceiptsSummaryLambda = new Function(this, "GetReceiptsSummaryLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "getReceiptsSummary.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+      environment: {
+        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+      },
+    });
+    this.receiptsTable.grantReadData(this.getReceiptsSummaryLambda);
   }
 }

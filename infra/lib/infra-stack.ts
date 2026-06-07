@@ -2,7 +2,6 @@ import * as cdk from 'aws-cdk-lib/core';
 import { Construct } from 'constructs';
 import { StorageConstruct } from './storage/storage-construct';
 import { GatewayConstruct } from './gateway/gateway-construct';
-import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
 import { AuthenticationConstruct } from './authentication/authentication-construct';
 import { BankingConstruct } from './banking/banking-constructs';
 
@@ -46,17 +45,38 @@ export class InfraStack extends cdk.Stack {
           resourcePath: "users",
           jwtRequired: jwtRequiredFlag,
         },
-        { function: storageConstruct.getReceiptsLambda,     
-           method: "GET",  
-           resourcePath: "receipts", 
-           jwtRequired: jwtRequiredFlag,
+        { 
+          function: storageConstruct.getReceiptsLambda,     
+          method: "GET",  
+          resourcePath: "receipts", 
+          jwtRequired: jwtRequiredFlag,
         }, 
-        { function: bankingConstruct.createLinkTokenLambda, 
+        {
+          function: storageConstruct.getReceiptLambda,
+          method: "GET",
+          resourcePath: "receipt", 
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: storageConstruct.deleteReceiptLambda,
+          method: "DELETE",
+          resourcePath: "receipt", 
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: storageConstruct.getReceiptsSummaryLambda,
+          method: "GET",
+          resourcePath: "summary", 
+          jwtRequired: jwtRequiredFlag,
+        },
+        { 
+          function: bankingConstruct.createLinkTokenLambda, 
           method: "POST", 
           resourcePath: "bank/connect",  
           jwtRequired: jwtRequiredFlag,
         },
-        { function: bankingConstruct.exchangeTokenLambda,   
+        { 
+          function: bankingConstruct.exchangeTokenLambda,   
           method: "POST", 
           resourcePath: "bank/exchange", 
           jwtRequired: jwtRequiredFlag 

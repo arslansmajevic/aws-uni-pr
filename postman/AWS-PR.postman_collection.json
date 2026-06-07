@@ -221,6 +221,22 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "Receipts Summary",
+      "request": {
+        "method": "GET",
+        "header": []
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Receipt",
+      "request": {
+        "method": "GET",
+        "header": []
+      },
+      "response": []
     }
   ],
   "event": [
