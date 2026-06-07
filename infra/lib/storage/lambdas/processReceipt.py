@@ -127,26 +127,6 @@ def process_image_with_bedrock(bucket, key):
     image_base64 = base64.b64encode(image_bytes).decode('utf-8')
     image_format = get_image_format(image_bytes)
 
-<<<<<<< Updated upstream
-    prompt = f"""Analyze this receipt image and extract details.
-    Categorize into EXACTLY ONE of: {', '.join(CATEGORIES)}.
-    Return ONLY valid JSON, no markdown:
-    {{"merchantName": "string or null", "receiptDate": "string or null",
-      "receiptTime": "string or null", "totalAmount": "string or null",
-      "subtotalAmount": "string or null", "taxAmount": "string or null",
-      "tipAmount": "string or null", "currency": "string or null",
-      "category": "string",
-      "lineItems": [{{"description": "string", "totalPrice": "string", "quantity": "string"}}]}}"""
-
-    body = json.dumps({
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"image": {"format": image_format, "source": {"bytes": image_base64}}},  
-                {"text": prompt}
-            ]
-        }],
-=======
     system_prompt = f"""You are a receipt data extraction service.
                         Your ONLY job is to extract structured data from receipt images.
                         You must ALWAYS return valid JSON matching the exact schema below.
@@ -185,30 +165,19 @@ def process_image_with_bedrock(bucket, key):
     body = json.dumps({
         "system": [{"text": system_prompt}],  
         "messages": [{"role": "user", "content": user_content}],
->>>>>>> Stashed changes
         "inferenceConfig": {"max_new_tokens": 1000}
     })
 
     bedrock_response = bedrock.invoke_model(modelId=BEDROCK_MODEL_ID, body=body)
     response_body = json.loads(bedrock_response["body"].read())
-<<<<<<< Updated upstream
-    
-    extracted_text = response_body["output"]["message"]["content"][0]["text"].strip()
-
-    if extracted_text.startswith("```"):
-=======
     extracted_text = response_body["output"]["message"]["content"][0]["text"].strip()
 
     if "```" in extracted_text:
->>>>>>> Stashed changes
         extracted_text = extracted_text.split("```")[1]
         if extracted_text.startswith("json"):
             extracted_text = extracted_text[4:]
         extracted_text = extracted_text.strip()
 
-<<<<<<< Updated upstream
-    return json.loads(extracted_text)
-=======
     result = json.loads(extracted_text)
     result = validate_extracted_data(result)
 
@@ -239,7 +208,6 @@ def validate_extracted_data(data):
         data["lineItems"] = data["lineItems"][:50]
 
     return data
->>>>>>> Stashed changes
 
 def get_image_format(image_bytes):
     if image_bytes[:8] == b'\x89PNG\r\n\x1a\n':

@@ -1,11 +1,8 @@
 import json
 import boto3
 import urllib.request
-<<<<<<< Updated upstream
-=======
 import time
 from datetime import datetime, timezone
->>>>>>> Stashed changes
 
 secrets = boto3.client("secretsmanager")
 
