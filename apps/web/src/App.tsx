@@ -6,16 +6,43 @@ import { RegisterPage } from './pages/auth/RegisterPage'
 import { UserPage } from './pages/user/UserPage'
 import { ReceiptUploadPage } from './pages/receipt/ReceiptUploadPage'
 import { UserDashboardPage } from './pages/receipt/UserDashboardPage'
+import { ProtectedRoute } from './components/ProtectedRoute'
 
 function App() {
   return (
     <Routes>
+      {/* Public routes - no token required */}
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/user" element={<UserPage />} />
-      <Route path="/upload" element={<ReceiptUploadPage />} />
-      <Route path="/dashboard" element={<UserDashboardPage />} />
+
+      {/* Protected routes - token required */}
+      <Route
+        path="/user"
+        element={
+          <ProtectedRoute>
+            <UserPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/upload"
+        element={
+          <ProtectedRoute>
+            <ReceiptUploadPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <UserDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Fallback to homepage */}
       <Route path="*" element={<HomePage />} />
     </Routes>
   )
