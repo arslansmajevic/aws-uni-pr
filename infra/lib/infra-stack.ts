@@ -6,12 +6,17 @@ import { AuthenticationConstruct } from './authentication/authentication-constru
 import { BankingConstruct } from './banking/banking-constructs';
 
 export class InfraStack extends cdk.Stack {
+  public readonly apiUrl: string;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-    
+
     var storageConstruct = new StorageConstruct(this, "ReceiptStorage");
     var gatewayConstruct = new GatewayConstruct(this, "ApiGateway");
-    var authenticationConstruct = new AuthenticationConstruct(this, "Authentication");
+    var authenticationConstruct = new AuthenticationConstruct(
+      this,
+      "Authentication",
+    );
     var bankingConstruct = new BankingConstruct(this, "Banking");
 
     const jwtRequiredFlag = true;
@@ -45,48 +50,50 @@ export class InfraStack extends cdk.Stack {
           resourcePath: "users",
           jwtRequired: jwtRequiredFlag,
         },
-        { 
-          function: storageConstruct.getReceiptsLambda,     
-          method: "GET",  
-          resourcePath: "receipts", 
+        {
+          function: storageConstruct.getReceiptsLambda,
+          method: "GET",
+          resourcePath: "receipts",
           jwtRequired: jwtRequiredFlag,
-        }, 
+        },
         {
           function: storageConstruct.getReceiptLambda,
           method: "GET",
-          resourcePath: "receipt", 
+          resourcePath: "receipt",
           jwtRequired: jwtRequiredFlag,
         },
         {
           function: storageConstruct.deleteReceiptLambda,
           method: "DELETE",
-          resourcePath: "receipt", 
+          resourcePath: "receipt",
           jwtRequired: jwtRequiredFlag,
         },
         {
           function: storageConstruct.getReceiptsSummaryLambda,
           method: "GET",
-          resourcePath: "summary", 
+          resourcePath: "summary",
           jwtRequired: jwtRequiredFlag,
         },
-        { 
-          function: bankingConstruct.createLinkTokenLambda, 
-          method: "POST", 
-          resourcePath: "bank/connect",  
+        {
+          function: bankingConstruct.createLinkTokenLambda,
+          method: "POST",
+          resourcePath: "bank/connect",
           jwtRequired: jwtRequiredFlag,
         },
-        { 
-          function: bankingConstruct.exchangeTokenLambda,   
-          method: "POST", 
-          resourcePath: "bank/exchange", 
-          jwtRequired: jwtRequiredFlag 
+        {
+          function: bankingConstruct.exchangeTokenLambda,
+          method: "POST",
+          resourcePath: "bank/exchange",
+          jwtRequired: jwtRequiredFlag,
         },
       ],
       authenticationConstruct.authorizer,
     );
 
+    this.apiUrl = gatewayConstruct.api.url;
+
     new cdk.CfnOutput(this, "ApiUrl", {
-      value: gatewayConstruct.api.url
+      value: this.apiUrl,
     });
   }
 }

@@ -1,7 +1,44 @@
 // apps/web/src/pages/homepage/HomePage.tsx
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+type RuntimeConfig = {
+	apiUrl: string
+}
+
 export function HomePage() {
+	const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null)
+
+	useEffect(() => {
+		let isMounted = true
+
+		async function loadRuntimeConfig() {
+			try {
+				const response = await fetch('/config.json', { cache: 'no-store' })
+
+				if (!response.ok) {
+					throw new Error(`Failed to load config.json: ${response.status}`)
+				}
+
+				const config = (await response.json()) as RuntimeConfig
+
+				if (isMounted) {
+					setRuntimeConfig(config)
+				}
+			} catch {
+				if (isMounted) {
+					setRuntimeConfig({ apiUrl: 'Unavailable' })
+				}
+			}
+		}
+
+		loadRuntimeConfig()
+
+		return () => {
+			isMounted = false
+		}
+	}, [])
+
 	return (
 		<main className="min-vh-100 bg-light">
 			<div className="container py-5">
@@ -47,6 +84,14 @@ export function HomePage() {
 									<div className="p-3 bg-light rounded-3 border h-100">
 										<div className="fs-3 fw-bold text-primary">3</div>
 										<div className="text-secondary">core areas ready for expansion</div>
+									</div>
+								</div>
+								<div className="col-12">
+									<div className="p-3 bg-dark text-white rounded-3 h-100">
+										<div className="text-uppercase small text-white-50 mb-2">Backend URL</div>
+										<div className="fw-semibold text-break">
+											{runtimeConfig?.apiUrl ?? 'Loading config.json...'}
+										</div>
 									</div>
 								</div>
 							</div>
