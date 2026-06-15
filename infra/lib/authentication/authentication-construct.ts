@@ -110,6 +110,7 @@ export class AuthenticationConstruct extends Construct {
 
     this.authorizer = new CognitoUserPoolsAuthorizer(this, "CognitoAuthorizer", {
       cognitoUserPools: [this.userPool],
+      identitySource: "method.request.header.Authorization",
     });
 
   }

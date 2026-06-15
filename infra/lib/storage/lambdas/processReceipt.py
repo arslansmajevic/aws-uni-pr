@@ -237,7 +237,7 @@ def handler(event, context):
 
         try:
             extracted_data = process_image_with_bedrock(bucket, key)
-            
+            extracted_data["s3ObjectKey"] = key
             if extracted_data.get("category") not in CATEGORIES:
                 extracted_data["category"] = "Other"
 

@@ -1,124 +1,140 @@
 // apps/web/src/pages/receipt/UserDashboardPage.tsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-
-type ReceiptItem = {
-	id: string
-	merchant: string
-	timestamp: string
-	verified: boolean
-	saved: boolean
-	amount: string
-	transactionId?: string
-}
-
-type ReceiptMonth = {
-	month: string
-	items: ReceiptItem[]
-}
-
-const receiptMonths: ReceiptMonth[] = [
-	{
-		month: 'June 2026',
-		items: [
-			{
-				id: 'r-1049',
-				merchant: 'Metro Grocery',
-				timestamp: '14 Jun 2026, 18:42',
-				verified: true,
-				saved: true,
-				amount: '€42.18',
-				transactionId: 'txn_9f2c81a4',
-			},
-			{
-				id: 'r-1048',
-				merchant: 'City Rail',
-				timestamp: '13 Jun 2026, 09:15',
-				verified: true,
-				saved: false,
-				amount: '€7.60',
-				transactionId: 'txn_2a7d41be',
-			},
-			{
-				id: 'r-1047',
-				merchant: 'Paper & Co',
-				timestamp: '02 Jun 2026, 11:03',
-				verified: false,
-				saved: true,
-				amount: '€18.90',
-			},
-		],
-	},
-	{
-		month: 'May 2026',
-		items: [
-			{
-				id: 'r-1046',
-				merchant: 'North Cafe',
-				timestamp: '29 May 2026, 08:24',
-				verified: true,
-				saved: true,
-				amount: '€5.70',
-				transactionId: 'txn_7c3ab0d9',
-			},
-			{
-				id: 'r-1045',
-				merchant: 'Office Depot',
-				timestamp: '18 May 2026, 16:11',
-				verified: false,
-				saved: false,
-				amount: '€126.50',
-			},
-			{
-				id: 'r-1044',
-				merchant: 'Quick Taxi',
-				timestamp: '04 May 2026, 22:08',
-				verified: true,
-				saved: true,
-				amount: '€24.20',
-				transactionId: 'txn_0bd6f134',
-			},
-		],
-	},
-	{
-		month: 'April 2026',
-		items: [
-			{
-				id: 'r-1043',
-				merchant: 'Home Supplies',
-				timestamp: '27 Apr 2026, 12:30',
-				verified: true,
-				saved: true,
-				amount: '€64.99',
-			},
-			{
-				id: 'r-1042',
-				merchant: 'Lunch Corner',
-				timestamp: '10 Apr 2026, 13:14',
-				verified: false,
-				saved: false,
-				amount: '€13.40',
-				transactionId: 'txn_5ee18a72',
-			},
-		],
-	},
-]
+import { getReceipts, deleteReceipt } from '../../services/receipts'
 
 export function UserDashboardPage() {
-	const [copiedTransactionId, setCopiedTransactionId] = useState<string | null>(null)
+	const [receipts, setReceipts] = useState<any[]>([])
+	const [isLoading, setIsLoading] = useState(true)
+	const [errorMessage, setErrorMessage] = useState<string | null>(null)
+	const [copiedId, setCopiedId] = useState<string | null>(null)
+	const [isBankConnected, setIsBankConnected] = useState(false)
+	const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
 
-	async function handleCopyTransactionId(transactionId: string) {
+	useEffect(() => {
+		loadData()
+		setIsBankConnected(localStorage.getItem('isBankConnected') === 'true')
+	}, [])
+
+	async function loadData() {
 		try {
-			await navigator.clipboard.writeText(transactionId)
-			setCopiedTransactionId(transactionId)
-			window.setTimeout(() => {
-				setCopiedTransactionId((currentValue) =>
-					currentValue === transactionId ? null : currentValue,
-				)
-			}, 1500)
-		} catch {
-			setCopiedTransactionId(null)
+			setIsLoading(true)
+			setErrorMessage(null)
+			const dbReceipts = await getReceipts()
+			
+			console.log("data from db:", dbReceipts); 
+			
+			setReceipts(dbReceipts)
+		} catch (err) {
+			setErrorMessage('Failed to load receipts from live AWS database.')
+		} finally {
+			setIsLoading(false)
 		}
+	}
+
+	async function handleDelete(receiptId: string) {
+		if (!window.confirm('Are you sure you want to delete this receipt?')) return
+		try {
+			await deleteReceipt(receiptId)
+			setReceipts(prev => prev.filter(r => r.receiptId !== receiptId))
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to delete receipt.')
+		}
+	}
+
+	async function handleCopyId(id: string) {
+		try {
+			await navigator.clipboard.writeText(id)
+			setCopiedId(id)
+			window.setTimeout(() => setCopiedId(current => current === id ? null : current), 1500)
+		} catch {
+			setCopiedId(null)
+		}
+	}
+
+	function getMonthLabel(dateStr: string | undefined | null): string {
+		if (!dateStr) return 'Processing & Unsorted'
+		try {
+			const dateObj = new Date(dateStr)
+			if (isNaN(dateObj.getTime())) return 'Processing & Unsorted'
+			return dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+		} catch {
+			return 'Processing & Unsorted'
+		}
+	}
+
+	function parseAmount(value: any): number {
+		if (!value) return 0
+		try {
+			const cleaned = String(value)
+				.replace(',', '.')
+				.replace('CHF', '')
+				.replace('$', '')
+				.replace('€', '')
+				.trim()
+			const parsed = parseFloat(cleaned)
+			return isNaN(parsed) ? 0 : parsed
+		} catch {
+			return 0
+		}
+	}
+
+	const sortedReceipts = [...receipts].sort((a, b) => {
+		const dateA = a.receiptDate || ''
+		const dateB = b.receiptDate || ''
+		return dateB.localeCompare(dateA)
+	})
+
+	const groupedMonths: { month: string; items: any[] }[] = []
+	sortedReceipts.forEach(receipt => {
+		const label = getMonthLabel(receipt.receiptDate)
+		let existingGroup = groupedMonths.find(g => g.month === label)
+		if (!existingGroup) {
+			existingGroup = { month: label, items: [] }
+			groupedMonths.push(existingGroup)
+		}
+		existingGroup.items.push(receipt)
+	})
+
+	const validCategories = ["Groceries", "Dining", "Entertainment", "Transport", "Health", "Shopping", "Utilities", "Other"]
+	const categoryBreakdown = validCategories.reduce((acc, cat) => {
+		acc[cat] = { count: 0, totalSpend: 0 }
+		return acc;
+	}, {} as Record<string, { count: number; totalSpend: number }>)
+
+	let calculatedTotalSpend = 0
+	receipts.forEach(receipt => {
+		const amount = parseAmount(receipt.totalAmount)
+		const category = receipt.category || 'Other'
+		
+		calculatedTotalSpend += amount
+
+		if (categoryBreakdown[category]) {
+			categoryBreakdown[category].count += 1
+			categoryBreakdown[category].totalSpend += amount
+		} else {
+			categoryBreakdown['Other'].count += 1
+			categoryBreakdown['Other'].totalSpend += amount
+		}
+	})
+
+	const maxCategorySpend = Math.max(...Object.values(categoryBreakdown).map(c => Object(c).totalSpend), 1)
+
+	const totalReceipts = receipts.length
+	const processingReceipts = receipts.filter(r => r.processingStatus === 'PROCESSING').length
+	
+	const matchedCount = receipts.filter(r => r.transactionMatchStatus === 'MATCHED').length
+	const possibleMatchCount = receipts.filter(r => r.transactionMatchStatus === 'POSSIBLE_MATCH').length
+	const unmatchedCount = receipts.filter(r => r.transactionMatchStatus === 'UNMATCHED').length
+	const totalEvaluated = matchedCount + possibleMatchCount + unmatchedCount
+	const matchRate = totalEvaluated > 0 ? ((matchedCount / totalEvaluated) * 100).toFixed(0) : '0'
+
+	if (isLoading) {
+		return (
+			<main className="min-vh-100 bg-light d-flex align-items-center justify-content-center">
+				<div className="spinner-border text-primary" role="status" />
+			</main>
+		)
 	}
 
 	return (
@@ -126,110 +142,233 @@ export function UserDashboardPage() {
 			<div className="container">
 				<div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
 					<div>
-						<p className="text-uppercase text-secondary fw-semibold mb-2">Receipts dashboard</p>
+						<p className="text-uppercase text-secondary fw-semibold mb-2">Live AWS Dashboard</p>
 						<h1 className="h2 mb-0">Receipt timeline</h1>
 					</div>
-
 					<div className="d-flex flex-wrap gap-3">
-						<Link to="/upload" className="btn btn-primary">
-							Upload receipt
-						</Link>
-						<Link to="/user" className="btn btn-outline-secondary">
-							User profile
-						</Link>
+						<Link to="/upload" className="btn btn-primary">Upload receipts</Link>
+						<Link to="/user" className="btn btn-outline-secondary">User profile</Link>
 					</div>
 				</div>
 
+				{errorMessage && <div className="alert alert-danger mb-4">{errorMessage}</div>}
+
 				<div className="row g-4">
-					<div className="col-12 col-xl-9">
+					<div className="col-12 col-xl-8">
 						<div className="d-grid gap-4">
-							{receiptMonths.map((monthGroup) => (
-								<section key={monthGroup.month} className="p-4 p-md-5 bg-white border rounded-4 shadow-sm">
-									<div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-										<h2 className="h4 mb-0">{monthGroup.month}</h2>
-										<span className="badge text-bg-secondary">{monthGroup.items.length} receipts</span>
-									</div>
+							{groupedMonths.length === 0 ? (
+								<div className="p-5 bg-white border rounded-4 shadow-sm text-center">
+									<p className="text-secondary mb-0">No documents indexed in your ledger. Upload your first financial receipt to start tracking!</p>
+								</div>
+							) : (
+								groupedMonths.map((group) => (
+									<section key={group.month} className="p-4 p-md-5 bg-white border rounded-4 shadow-sm">
+										<div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+											<h2 className="h4 mb-0 fw-bold text-dark">{group.month}</h2>
+											<span className="badge text-bg-secondary">{group.items.length} records</span>
+										</div>
 
-									<div className="list-group list-group-flush">
-										{monthGroup.items.map((item) => (
-											<div key={item.id} className="list-group-item px-0 py-3">
-												<div className="d-flex flex-column flex-md-row justify-content-between gap-3">
-													<div>
-														<div className="fw-semibold mb-1">{item.merchant}</div>
-														<div className="text-secondary small">{item.id}</div>
-														{item.transactionId ? (
-															(() => {
-																const transactionId = item.transactionId
-
-																return (
-															<div className="mt-2">
-																<div className="text-secondary small mb-1">Transaction ID</div>
-																<button
-																	type="button"
-																	className={`btn btn-sm font-monospace ${
-																			copiedTransactionId === transactionId
-																			? 'btn-success'
-																			: 'btn-outline-primary'
-																	}`}
-																		onClick={() => handleCopyTransactionId(transactionId)}
-																		aria-label={`Copy transaction ID ${transactionId}`}
-																>
-																		{copiedTransactionId === transactionId
-																		? 'Copied to clipboard'
-																			: transactionId}
-																</button>
-															</div>
-																)
-															})()
-														) : null}
+										<div className="list-group list-group-flush">
+										{group.items.map((item) => (
+											<div key={item.receiptId} className="list-group-item px-0 py-3">
+											<div className="row align-items-center g-3">
+												
+												<div className="col-12 col-md-7">
+												<div className="fw-bold fs-5 text-dark text-truncate" title={item.merchantName}>
+													{item.merchantName || 'Processing...'}
+												</div>
+												<div className="text-secondary small d-flex align-items-center gap-2 mt-1">
+													<span style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+													{item.receiptId.substring(0, 12)}...
+													</span>
+													<button 
+													type="button" 
+													className="btn btn-sm btn-link p-0 text-decoration-none text-primary"
+													onClick={() => handleCopyId(item.receiptId)}
+													>
+													{copiedId === item.receiptId ? '✅' : '📋'}
+													</button>
+												</div>
+												{item.matchedTransactionName && (
+													<div className="mt-1 text-success small fw-bold">
+													🔗 {item.matchedTransactionName}
 													</div>
+												)}
+												</div>
 
-													<div className="d-flex flex-wrap gap-2 align-items-center">
-														<span className="badge text-bg-light border text-secondary">
-															{item.timestamp}
-														</span>
-														<span className={`badge ${item.verified ? 'text-bg-success' : 'text-bg-warning'}`}>
-															Verified: {item.verified ? 'Yes' : 'No'}
-														</span>
-														<span className={`badge ${item.saved ? 'text-bg-primary' : 'text-bg-secondary'}`}>
-															Saved: {item.saved ? 'Yes' : 'No'}
-														</span>
-														<span className="badge text-bg-dark">{item.amount}</span>
-													</div>
+												<div className="col-12 col-md-5 text-md-end">
+												<div className="d-flex flex-wrap gap-2 justify-content-md-end align-items-center mb-2">
+													<span className="badge text-bg-light border text-secondary">
+													{item.receiptDate || 'No Date'}
+													</span>
+													<span className="badge text-bg-info text-dark">
+													{item.category || 'Other'}
+													</span>
+													<span className={`badge ${item.transactionMatchStatus === 'MATCHED' ? 'text-bg-success' : 'text-bg-secondary'}`}>
+													{item.transactionMatchStatus || 'PENDING'}
+													</span>
+													<span className="badge text-bg-dark fs-6">
+													{item.totalAmount ? `$${item.totalAmount}` : '$-.--'}
+													</span>
+												</div>
+												
+												<div className="d-flex gap-2 justify-content-md-end">
+													<button 
+														type="button" 
+														className="btn btn-sm btn-outline-primary"
+														onClick={() => setPreviewImageUrl(item.imageUrl || null)}
+														disabled={!item.imageUrl}
+													>
+														👁️ View
+													</button>
+													<button 
+														type="button" 
+														className="btn btn-sm btn-outline-danger"
+														onClick={() => handleDelete(item.receiptId)}
+													>
+														Delete
+													</button>
+												</div>
 												</div>
 											</div>
+											</div>
 										))}
-									</div>
-								</section>
-							))}
+										</div>
+									</section>
+								))
+							)}
 						</div>
 					</div>
 
-					<div className="col-12 col-xl-3">
-						<div className="p-4 bg-white border rounded-4 shadow-sm h-100">
-							<p className="text-uppercase text-secondary fw-semibold mb-2">Summary</p>
+					<div className="col-12 col-xl-4 d-grid gap-4 align-self-start">
+						
+						<div className="p-4 bg-white border rounded-4 shadow-sm">
+							<p className="text-uppercase text-secondary fw-semibold mb-2">Live Statistics</p>
 							<div className="d-grid gap-3">
 								<div>
-									<div className="text-secondary small">Total receipts</div>
-									<div className="h4 mb-0">8</div>
+									<div className="text-secondary small">Total volume velocity</div>
+									<div className="h3 mb-0 fw-bold text-dark">${calculatedTotalSpend.toFixed(2)}</div>
 								</div>
-								<div>
-									<div className="text-secondary small">Verified receipts</div>
-									<div className="h4 mb-0">5</div>
+								<hr className="my-1" />
+								<div className="row g-2">
+									<div className="col-6">
+										<div className="text-secondary small">Total documents</div>
+										<div className="h5 mb-0">{totalReceipts}</div>
+									</div>
+									<div className="col-6">
+										<div className="text-secondary small">In AI pipeline</div>
+										<div className="h5 mb-0 text-warning">{processingReceipts}</div>
+									</div>
 								</div>
-								<div>
-									<div className="text-secondary small">Saved receipts</div>
-									<div className="h4 mb-0">5</div>
+								<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={loadData}>
+									🔄 Refresh Timeline
+								</button>
+							</div>
+						</div>
+
+						<div className="p-4 bg-white border rounded-4 shadow-sm">
+							<p className="text-uppercase text-secondary fw-semibold mb-2">Bank Reconciliation</p>
+							<p className="text-secondary small mb-3">Live linkage precision score mapping ledger inputs to third-party bank statements.</p>
+							
+							<div className="d-flex align-items-center gap-3 mb-3 p-3 bg-light rounded-3 border">
+								<div className="display-5 fw-bold text-success">{matchRate}%</div>
+								<div className="small lh-sm text-secondary">Overall ledger match rate probability</div>
+							</div>
+
+							<div className="d-grid gap-2 small">
+								<div className="d-flex justify-content-between p-2 rounded-2 bg-light">
+									<span className="text-success fw-semibold">✓ Fully Matched</span>
+									<span className="badge text-bg-success">{matchedCount}</span>
 								</div>
-								<div>
-									<div className="text-secondary small">Latest upload</div>
-									<div className="fw-semibold">14 Jun 2026, 18:42</div>
+								<div className="d-flex justify-content-between p-2 rounded-2 bg-light">
+									<span className="text-warning fw-semibold">⚠ Possible Matches</span>
+									<span className="badge text-bg-warning text-dark">{possibleMatchCount}</span>
+								</div>
+								<div className="d-flex justify-content-between p-2 rounded-2 bg-light">
+									<span className="text-danger fw-semibold">✗ Unmatched / Missing</span>
+									<span className="badge text-bg-danger">{unmatchedCount}</span>
 								</div>
 							</div>
+						</div>
+
+						<div className="p-4 bg-white border rounded-4 shadow-sm">
+							<p className="text-uppercase text-secondary fw-semibold mb-2">Spend by Category</p>
+							<p className="text-secondary small mb-3">Asynchronous classification analytics driven by AWS Bedrock AI models.</p>
+							<div className="d-grid gap-3">
+								{Object.entries(categoryBreakdown).map(([category, data]) => {
+									const percentage = (data.totalSpend / maxCategorySpend) * 100
+									if (data.count === 0) return null
+
+									return (
+										<div key={category} className="small">
+											<div className="d-flex justify-content-between align-items-center mb-1">
+												<span className="fw-semibold text-dark">{category} ({data.count})</span>
+												<span className="text-secondary fw-bold">${data.totalSpend.toFixed(2)}</span>
+											</div>
+											<div className="progress" style={{ height: '6px' }}>
+												<div 
+													className="progress-bar bg-primary rounded-pill" 
+													role="progressbar" 
+													style={{ width: `${percentage}%` }}
+												/>
+											</div>
+										</div>
+									)
+								})}
+							</div>
+						</div>
+
+						<div className="p-4 bg-white border rounded-4 shadow-sm">
+							<p className="text-uppercase text-secondary fw-semibold mb-2">Bank Connection</p>
+							{isBankConnected ? (
+								<div className="text-start">
+									<div className="alert alert-success py-2 px-3 small mb-2 d-flex align-items-center gap-2">
+										<span className="fs-5">🏦</span> <strong>Plaid Connected</strong>
+									</div>
+									<p className="text-secondary small mb-0">Your transactions are successfully syncing with FinSight automatically.</p>
+								</div>
+							) : (
+								<div className="text-start">
+									<div className="alert alert-warning py-2 px-3 small mb-2">
+										⚠️ <strong>Action Required</strong>
+									</div>
+									<p className="text-secondary small mb-3">Please link your bank account via Plaid Sandbox to verify your transactions.</p>
+									<Link to="/user" className="btn btn-sm btn-primary w-100">
+										Go Connect Bank
+									</Link>
+								</div>
+							)}
 						</div>
 					</div>
 				</div>
 			</div>
+
+			{previewImageUrl && (
+				<div 
+					className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
+					style={{ backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 1060 }}
+					onClick={() => setPreviewImageUrl(null)}
+				>
+					<div 
+						className="bg-white border rounded-4 p-3 shadow-lg position-relative d-flex flex-column m-3 align-items-center" 
+						style={{ maxWidth: '540px', width: '100%', maxHeight: '85vh' }}
+						onClick={(e) => e.stopPropagation()}
+					>
+						<div className="d-flex justify-content-between align-items-center w-100 mb-2 border-b pb-2">
+							<span className="fw-bold text-dark">📄 Receipt Document Preview</span>
+							<button type="button" className="btn-close" onClick={() => setPreviewImageUrl(null)} />
+						</div>
+						<div className="w-100 overflow-auto bg-light rounded-3 p-2 text-center d-flex align-items-center justify-content-center" style={{ minHeight: '300px' }}>
+							<img 
+								src={previewImageUrl} 
+								alt="AWS S3 Receipt Source File" 
+								className="img-fluid rounded shadow-sm max-h-100" 
+								style={{ maxHeight: '60vh', objectFit: 'contain' }}
+							/>
+						</div>
+					</div>
+				</div>
+			)}
 		</main>
 	)
 }

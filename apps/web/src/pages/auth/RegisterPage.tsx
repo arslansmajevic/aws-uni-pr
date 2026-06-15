@@ -1,10 +1,11 @@
 // apps/web/src/pages/auth/RegisterPage.tsx
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { registerUser } from '../../services/authentication'
 
 export function RegisterPage() {
+  const navigate = useNavigate()   
   const [givenName, setGivenName] = useState('')
   const [familyName, setFamilyName] = useState('')
   const [email, setEmail] = useState('')
@@ -34,7 +35,11 @@ export function RegisterPage() {
         familyName,
       })
 
-      setSuccessMessage('Account created successfully.')
+      setSuccessMessage('Account created successfully. Redirecting to login...')
+      setTimeout(() => {
+        navigate('/login')
+      }, 1500)
+      
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Registration failed.')
     } finally {

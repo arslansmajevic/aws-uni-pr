@@ -57,15 +57,9 @@ export class InfraStack extends cdk.Stack {
           jwtRequired: jwtRequiredFlag,
         },
         {
-          function: storageConstruct.getReceiptLambda,
-          method: "GET",
-          resourcePath: "receipt",
-          jwtRequired: jwtRequiredFlag,
-        },
-        {
           function: storageConstruct.deleteReceiptLambda,
           method: "DELETE",
-          resourcePath: "receipt",
+          resourcePath: "receipts/{receiptId}",
           jwtRequired: jwtRequiredFlag,
         },
         {

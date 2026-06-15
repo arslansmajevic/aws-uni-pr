@@ -6,6 +6,7 @@ import {
   BucketEncryption,
   BlockPublicAccess,
   EventType,
+  HttpMethods,
 } from "aws-cdk-lib/aws-s3";
 import { LambdaDestination } from "aws-cdk-lib/aws-s3-notifications";
 import { Table, AttributeType, BillingMode } from "aws-cdk-lib/aws-dynamodb";
@@ -36,6 +37,13 @@ export class StorageConstruct extends Construct {
       encryption: BucketEncryption.KMS,   
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
+      cors: [
+      {
+        allowedMethods: [HttpMethods.GET],
+        allowedOrigins: ["*"], 
+        allowedHeaders: ["*"],
+      },
+    ],
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       lifecycleRules: [
@@ -93,10 +101,12 @@ export class StorageConstruct extends Construct {
       code: Code.fromAsset(path.join(__dirname, "lambdas")),
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+        BUCKET_NAME: this.bucket.bucketName,
       },
     });
 
     this.receiptsTable.grantReadData(this.getReceiptsLambda);
+    this.bucket.grantRead(this.getReceiptsLambda); 
 
     processReceiptLambda.addToRolePolicy(new PolicyStatement({
       actions: [
@@ -115,16 +125,6 @@ export class StorageConstruct extends Construct {
       actions: ["secretsmanager:GetSecretValue"],
       resources: ["*"],
     }));
-    
-    this.getReceiptLambda = new Function(this, "GetReceiptLambda", {
-      runtime: Runtime.PYTHON_3_12,
-      handler: "getReceipt.handler",
-      code: Code.fromAsset(path.join(__dirname, "lambdas")),
-      environment: {
-        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
-      },
-    });
-    this.receiptsTable.grantReadData(this.getReceiptLambda);
 
     this.deleteReceiptLambda = new Function(this, "DeleteReceiptLambda", {
       runtime: Runtime.PYTHON_3_12,
