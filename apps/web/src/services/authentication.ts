@@ -116,6 +116,7 @@ export type TokenClaims = {
 	cognito_username?: string
 	cognito_user_status?: string
 	iat?: number
+	exp?: number
 }
 
 function decodeToken(token: string): TokenClaims | null {
@@ -130,7 +131,34 @@ function decodeToken(token: string): TokenClaims | null {
 	}
 }
 
-export function getStoredTokens(): AuthTokens | null {
+function getTokenExpirationTime(token: string): number | null {
+	const claims = decodeToken(token)
+	if (!claims?.exp) {
+		return null
+	}
+
+	return claims.exp * 1000
+}
+
+function isTokenExpiringSoon(token: string, thresholdMs = 5 * 60 * 1000): boolean {
+	const expirationTime = getTokenExpirationTime(token)
+	if (!expirationTime) {
+		return false
+	}
+
+	return expirationTime - Date.now() <= thresholdMs
+}
+
+function storeTokens(tokens: AuthTokens): void {
+	// Store tokens in localStorage for now
+	// In production, consider using secure httpOnly cookies
+	localStorage.setItem('accessToken', tokens.accessToken)
+	localStorage.setItem('idToken', tokens.idToken)
+	localStorage.setItem('refreshToken', tokens.refreshToken)
+	localStorage.setItem('expiresIn', tokens.expiresIn.toString())
+}
+
+function readStoredTokens(): AuthTokens | null {
 	const accessToken = localStorage.getItem('accessToken')
 	const idToken = localStorage.getItem('idToken')
 	const refreshToken = localStorage.getItem('refreshToken')
@@ -148,11 +176,77 @@ export function getStoredTokens(): AuthTokens | null {
 	}
 }
 
-export function getUserClaims(): TokenClaims | null {
-	const idToken = localStorage.getItem('idToken')
-	if (!idToken) return null
+async function refreshStoredTokens(): Promise<AuthTokens | null> {
+	const currentTokens = readStoredTokens()
+	if (!currentTokens?.refreshToken) {
+		return null
+	}
 
-	return decodeToken(idToken)
+	try {
+		const config = await loadConfig()
+		const response = await fetch(buildUrl(config.apiUrl, 'refresh'), {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({ refreshToken: currentTokens.refreshToken }),
+		})
+
+		if (!response.ok) {
+			logout()
+			return null
+		}
+
+		const data = (await response.json()) as {
+			AccessToken: string
+			IdToken: string
+			ExpiresIn: number
+		}
+
+		const refreshedTokens: AuthTokens = {
+			accessToken: data.AccessToken,
+			idToken: data.IdToken,
+			refreshToken: currentTokens.refreshToken,
+			expiresIn: data.ExpiresIn,
+		}
+
+		storeTokens(refreshedTokens)
+		return refreshedTokens
+	} catch {
+		logout()
+		return null
+	}
+}
+
+export function getStoredTokens(): AuthTokens | null {
+	return readStoredTokens()
+}
+
+export async function getValidStoredTokens(): Promise<AuthTokens | null> {
+	const storedTokens = readStoredTokens()
+	if (!storedTokens) {
+		return null
+	}
+
+	if (isTokenExpiringSoon(storedTokens.accessToken)) {
+		return await refreshStoredTokens()
+	}
+
+	return storedTokens
+}
+
+export async function getValidIdToken(): Promise<string | null> {
+	const tokens = await getValidStoredTokens()
+	return tokens?.idToken ?? null
+}
+
+export async function getValidUserClaims(): Promise<TokenClaims | null> {
+	const tokens = await getValidStoredTokens()
+	if (!tokens) {
+		return null
+	}
+
+	return decodeToken(tokens.idToken)
 }
 
 export function logout(): void {

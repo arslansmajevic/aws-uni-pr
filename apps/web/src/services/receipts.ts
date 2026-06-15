@@ -1,4 +1,5 @@
 // apps/web/src/services/receipts.ts
+import { getValidIdToken } from './authentication'
 
 type AppConfig = {
 	apiUrl: string
@@ -20,7 +21,7 @@ export type UploadResponse = {
 
 export async function uploadReceipt(file: File): Promise<UploadResponse> {
 	const config = await loadConfig()
-	const token = localStorage.getItem('idToken') 
+	const token = await getValidIdToken()
 
 	if (!token) {
 		throw new Error('User is not authenticated. Please log in again.')
@@ -60,7 +61,7 @@ export async function uploadReceipt(file: File): Promise<UploadResponse> {
 
 export async function getReceipts(): Promise<any[]> {
 	const config = await loadConfig()
-	const token = localStorage.getItem('idToken')
+	const token = await getValidIdToken()
 
 	if (!token) throw new Error('Not authenticated')
 
@@ -80,7 +81,7 @@ export async function getReceipts(): Promise<any[]> {
 
 export async function deleteReceipt(receiptId: string): Promise<void> {
 	const config = await loadConfig()
-	const token = localStorage.getItem('idToken')
+	const token = await getValidIdToken()
 
 	if (!token) throw new Error('Not authenticated')
 

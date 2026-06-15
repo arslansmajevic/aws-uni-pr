@@ -1,7 +1,7 @@
 // apps/web/src/pages/user/UserPage.tsx
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getUserClaims, logout } from '../../services/authentication'
+import { getValidUserClaims, logout } from '../../services/authentication'
 import { getPlaidLinkToken, exchangePlaidPublicToken } from '../../services/banking'
 
 type UserInfo = {
@@ -21,29 +21,45 @@ export function UserPage() {
     const [plaidError, setPlaidError] = useState<string | null>(null)
 
     useEffect(() => {
-        const claims = getUserClaims()
-        if (!claims || !claims.email) {
-            navigate('/login')
-            return
+        let isMounted = true
+
+        async function initializeUserPage() {
+            const claims = await getValidUserClaims()
+
+            if (!isMounted) {
+                return
+            }
+
+            if (!claims || !claims.email) {
+                navigate('/login')
+                return
+            }
+
+            setUserInfo({
+                givenName: claims.given_name || 'User',
+                familyName: claims.family_name || '',
+                email: claims.email,
+                userId: claims.sub || claims.cognito_username || 'unknown',
+            })
+
+            setIsBankConnected(localStorage.getItem('isBankConnected') === 'true')
+            setIsLoading(false)
+
+            const script = document.createElement('script')
+            script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js'
+            script.async = true
+            document.head.appendChild(script)
+
+            return () => {
+                document.head.removeChild(script)
+            }
         }
 
-        setUserInfo({
-            givenName: claims.given_name || 'User',
-            familyName: claims.family_name || '',
-            email: claims.email,
-            userId: claims.sub || claims.cognito_username || 'unknown',
-        })
-
-        setIsBankConnected(localStorage.getItem('isBankConnected') === 'true')
-        setIsLoading(false)
-
-        const script = document.createElement('script')
-        script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js'
-        script.async = true
-        document.head.appendChild(script)
+        const cleanupPromise = initializeUserPage()
 
         return () => {
-            document.head.removeChild(script)
+            isMounted = false
+            cleanupPromise.catch(() => undefined)
         }
     }, [navigate])
 

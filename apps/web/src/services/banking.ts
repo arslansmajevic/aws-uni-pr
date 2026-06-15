@@ -1,4 +1,5 @@
 // apps/web/src/services/banking.ts
+import { getValidIdToken } from './authentication'
 
 type AppConfig = {
 	apiUrl: string
@@ -12,7 +13,7 @@ async function loadConfig(): Promise<AppConfig> {
 
 export async function savePlaidCredentials(clientId: string, secret: string): Promise<void> {
 	const config = await loadConfig()
-	const token = localStorage.getItem('idToken')
+	const token = await getValidIdToken()
 
 	if (!token) throw new Error('Not authenticated')
 
@@ -33,7 +34,7 @@ export async function savePlaidCredentials(clientId: string, secret: string): Pr
 
 export async function getPlaidLinkToken(): Promise<string> {
 	const config = await loadConfig()
-	const token = localStorage.getItem('idToken')
+	const token = await getValidIdToken()
 
 	if (!token) throw new Error('Not authenticated')
 
@@ -52,7 +53,7 @@ export async function getPlaidLinkToken(): Promise<string> {
 
 export async function exchangePlaidPublicToken(publicToken: string): Promise<void> {
 	const config = await loadConfig()
-	const token = localStorage.getItem('idToken')
+	const token = await getValidIdToken()
 
 	if (!token) throw new Error('Not authenticated')
 
