@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(os.environ["RECEIPTS_TABLE_NAME"])
 s3_client = boto3.client("s3")
-bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+bedrock = boto3.client("bedrock-runtime", region_name="eu-central-1")
 
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
 CATEGORIES = ["Groceries", "Dining", "Entertainment", "Transport", "Health", "Shopping", "Utilities", "Other"]
