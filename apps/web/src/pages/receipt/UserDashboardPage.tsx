@@ -9,7 +9,6 @@ export function UserDashboardPage() {
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
 	const [copiedId, setCopiedId] = useState<string | null>(null)
 	const [isBankConnected, setIsBankConnected] = useState(false)
-	const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
 
 	useEffect(() => {
 		loadData()
@@ -213,14 +212,12 @@ export function UserDashboardPage() {
 												</div>
 												
 												<div className="d-flex gap-2 justify-content-md-end">
-													<button 
-														type="button" 
+													<Link 
+														to={`/receipt?id=${encodeURIComponent(item.receiptId)}`}
 														className="btn btn-sm btn-outline-primary"
-														onClick={() => setPreviewImageUrl(item.imageUrl || null)}
-														disabled={!item.imageUrl}
 													>
 														👁️ View
-													</button>
+													</Link>
 													<Link 
 														to={`/receipt?id=${encodeURIComponent(item.receiptId)}`}
 														className="btn btn-sm btn-outline-secondary"
@@ -349,32 +346,6 @@ export function UserDashboardPage() {
 				</div>
 			</div>
 
-			{previewImageUrl && (
-				<div 
-					className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
-					style={{ backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 1060 }}
-					onClick={() => setPreviewImageUrl(null)}
-				>
-					<div 
-						className="bg-white border rounded-4 p-3 shadow-lg position-relative d-flex flex-column m-3 align-items-center" 
-						style={{ maxWidth: '540px', width: '100%', maxHeight: '85vh' }}
-						onClick={(e) => e.stopPropagation()}
-					>
-						<div className="d-flex justify-content-between align-items-center w-100 mb-2 border-b pb-2">
-							<span className="fw-bold text-dark">📄 Receipt Document Preview</span>
-							<button type="button" className="btn-close" onClick={() => setPreviewImageUrl(null)} />
-						</div>
-						<div className="w-100 overflow-auto bg-light rounded-3 p-2 text-center d-flex align-items-center justify-content-center" style={{ minHeight: '300px' }}>
-							<img 
-								src={previewImageUrl} 
-								alt="AWS S3 Receipt Source File" 
-								className="img-fluid rounded shadow-sm max-h-100" 
-								style={{ maxHeight: '60vh', objectFit: 'contain' }}
-							/>
-						</div>
-					</div>
-				</div>
-			)}
 		</main>
 	)
 }

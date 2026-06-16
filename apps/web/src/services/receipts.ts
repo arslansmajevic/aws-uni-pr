@@ -19,6 +19,29 @@ export type UploadResponse = {
 	key: string
 }
 
+export type ReceiptSummaryItem = {
+	name?: string | null
+	quantity?: string | number | null
+	price?: string | number | null
+}
+
+export type ReceiptSummaryResponse = {
+	receiptId: string
+	merchantName?: string | null
+	receiptDate?: string | null
+	receiptTime?: string | null
+	category?: string | null
+	totalAmount?: string | number | null
+	currency?: string | null
+	receiptItems?: ReceiptSummaryItem[]
+	imageUrl?: string | null
+	transactionMatchStatus?: string | null
+	matchedTransactionName?: string | null
+	matchedTransactionId?: string | null
+	matchedAmount?: string | number | null
+	matchedDate?: string | null
+}
+
 export async function uploadReceipt(file: File): Promise<UploadResponse> {
 	const config = await loadConfig()
 	const token = await getValidIdToken()
@@ -95,4 +118,25 @@ export async function deleteReceipt(receiptId: string): Promise<void> {
 		const errorData = await response.json().catch(() => ({}))
 		throw new Error(errorData.message || 'Failed to delete receipt')
 	}
+}
+
+export async function getReceiptSummary(receiptId: string): Promise<ReceiptSummaryResponse> {
+	const config = await loadConfig()
+	const token = await getValidIdToken()
+
+	if (!token) throw new Error('Not authenticated')
+
+	const response = await fetch(`${config.apiUrl.replace(/\/$/, '')}/receipts/${receiptId}`, {
+		method: 'GET',
+		headers: {
+			'Authorization': token,
+		},
+	})
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({}))
+		throw new Error(errorData.message || 'Failed to fetch receipt summary')
+	}
+
+	return (await response.json()) as ReceiptSummaryResponse
 }

@@ -1,22 +1,15 @@
 // apps/web/src/pages/receipt/ReceiptSummary.tsx
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { deleteReceipt, getReceiptSummary, type ReceiptSummaryResponse } from '../../services/receipts'
 
 type ReceiptItem = {
-	name: string
-	quantity: number
-	price: number
+	name?: string | null
+	quantity?: string | number | null
+	price?: string | number | null
 }
 
-const dummyReceiptItems: ReceiptItem[] = [
-	{ name: 'Whole grain bread', quantity: 2, price: 3.5 },
-	{ name: 'Organic eggs', quantity: 1, price: 6.9 },
-	{ name: 'Greek yogurt', quantity: 3, price: 2.2 },
-	{ name: 'Fresh berries', quantity: 2, price: 4.75 },
-	{ name: 'Coffee beans', quantity: 1, price: 12.5 },
-]
-
-const dummyImageSvg = `
+const fallbackImageSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -26,46 +19,107 @@ const dummyImageSvg = `
   </defs>
   <rect width="900" height="1200" rx="36" fill="url(#bg)" />
   <rect x="90" y="70" width="720" height="1060" rx="28" fill="#ffffff" stroke="#cbd5e1" stroke-width="4" />
-  <rect x="140" y="130" width="180" height="26" rx="13" fill="#0f172a" opacity="0.9" />
-  <rect x="140" y="190" width="280" height="18" rx="9" fill="#94a3b8" />
-  <rect x="140" y="230" width="220" height="18" rx="9" fill="#cbd5e1" />
-  <line x1="140" y1="320" x2="760" y2="320" stroke="#e2e8f0" stroke-width="4" />
-  <text x="140" y="380" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#0f172a">Market Receipt</text>
-  <text x="140" y="435" font-family="Arial, sans-serif" font-size="24" fill="#475569">Receipt ID: someId</text>
-  <text x="140" y="480" font-family="Arial, sans-serif" font-size="24" fill="#475569">Date: 16 June 2026</text>
-  <rect x="140" y="540" width="620" height="2" fill="#e2e8f0" />
-  <text x="140" y="610" font-family="Arial, sans-serif" font-size="28" fill="#0f172a">Groceries</text>
-  <text x="610" y="610" font-family="Arial, sans-serif" font-size="28" fill="#0f172a">$30.12</text>
-  <text x="140" y="680" font-family="Arial, sans-serif" font-size="28" fill="#0f172a">Dining</text>
-  <text x="610" y="680" font-family="Arial, sans-serif" font-size="28" fill="#0f172a">$18.40</text>
-  <text x="140" y="750" font-family="Arial, sans-serif" font-size="28" fill="#0f172a">Other</text>
-  <text x="610" y="750" font-family="Arial, sans-serif" font-size="28" fill="#0f172a">$12.50</text>
-  <rect x="140" y="860" width="620" height="2" fill="#e2e8f0" />
-  <text x="140" y="950" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#0f172a">Total</text>
-  <text x="610" y="950" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#0f172a">$61.02</text>
-  <circle cx="740" cy="178" r="26" fill="#0f172a" opacity="0.9" />
-  <circle cx="740" cy="178" r="10" fill="#ffffff" />
+  <text x="140" y="180" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#0f172a">Receipt Preview</text>
+  <text x="140" y="240" font-family="Arial, sans-serif" font-size="24" fill="#475569">No image available</text>
 </svg>
 `
 
-function formatCurrency(amount: number): string {
+function formatCurrency(amount: number, currency = 'USD'): string {
 	return new Intl.NumberFormat('en-US', {
 		style: 'currency',
-		currency: 'USD',
+		currency,
 	}).format(amount)
+}
+
+function parseAmount(value: string | number | null | undefined): number {
+	if (value === null || value === undefined) {
+		return 0
+	}
+
+	const parsed = Number(String(value).replace(/[^0-9.-]/g, ''))
+	return Number.isFinite(parsed) ? parsed : 0
 }
 
 export function ReceiptSummary() {
 	const [searchParams] = useSearchParams()
-	const receiptId = searchParams.get('id') ?? 'someId'
+	const receiptId = searchParams.get('id')
+	const [receipt, setReceipt] = useState<ReceiptSummaryResponse | null>(null)
+	const [isLoading, setIsLoading] = useState(true)
+	const [errorMessage, setErrorMessage] = useState<string | null>(null)
 	const [isExpanded, setIsExpanded] = useState(false)
+	const [isDeleting, setIsDeleting] = useState(false)
 
-	const receiptImage = useMemo(() => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(dummyImageSvg.replaceAll('someId', receiptId))}`, [receiptId])
+	useEffect(() => {
+		let isMounted = true
 
-	const total = dummyReceiptItems.reduce((sum, item) => sum + item.quantity * item.price, 0)
+		async function loadReceipt() {
+			if (!receiptId) {
+				setErrorMessage('Missing receipt id in the URL.')
+				setIsLoading(false)
+				return
+			}
 
-	function handleDeleteReceipt() {
-		window.alert(`Dummy delete action for receipt ${receiptId}`)
+			try {
+				setIsLoading(true)
+				setErrorMessage(null)
+				const response = await getReceiptSummary(receiptId)
+
+				if (isMounted) {
+					setReceipt(response)
+				}
+			} catch (error) {
+				if (isMounted) {
+					setErrorMessage(error instanceof Error ? error.message : 'Failed to load receipt summary.')
+				}
+			} finally {
+				if (isMounted) {
+					setIsLoading(false)
+				}
+			}
+		}
+
+		loadReceipt()
+
+		return () => {
+			isMounted = false
+		}
+	}, [receiptId])
+
+	const receiptItems: ReceiptItem[] = receipt?.receiptItems ?? []
+	const currency = receipt?.currency || 'USD'
+	const total = receiptItems.reduce((sum, item) => {
+		const quantity = parseAmount(item.quantity)
+		const price = parseAmount(item.price)
+		return sum + quantity * price
+	}, 0)
+	const fallbackReceiptImage = useMemo(
+		() => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(fallbackImageSvg)}`,
+		[]
+	)
+	const receiptImage = receipt?.imageUrl || fallbackReceiptImage
+
+	async function handleDeleteReceipt() {
+		if (!receiptId || !window.confirm('Delete this receipt?')) {
+			return
+		}
+
+		try {
+			setIsDeleting(true)
+			await deleteReceipt(receiptId)
+			window.location.href = '/dashboard'
+		} catch (error) {
+			window.alert(error instanceof Error ? error.message : 'Failed to delete receipt.')
+		} finally {
+			setIsDeleting(false)
+		}
+	}
+
+	if (isLoading) {
+		return (
+			<main className="min-vh-100 bg-light d-flex align-items-center justify-content-center">
+				<div className="spinner-border text-primary" role="status" />
+			</main>
+		)
 	}
 
 	return (
@@ -74,14 +128,18 @@ export function ReceiptSummary() {
 				<div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
 					<div>
 						<p className="text-uppercase text-secondary fw-semibold mb-2">Receipt summary</p>
-						<h1 className="h2 mb-1">Receipt {receiptId}</h1>
-						<p className="text-secondary mb-0">Dummy receipt detail view exposed at /receipt?id={receiptId}</p>
+						<h1 className="h2 mb-1">Receipt {receiptId || 'unknown'}</h1>
+						<p className="text-secondary mb-0">
+							{receipt?.merchantName || 'Receipt detail loaded from the backend'}
+						</p>
 					</div>
 					<div className="d-flex flex-wrap gap-2">
 						<Link to="/dashboard" className="btn btn-outline-secondary">Back to dashboard</Link>
 						<Link to="/user" className="btn btn-outline-primary">Profile</Link>
 					</div>
 				</div>
+
+				{errorMessage ? <div className="alert alert-danger mb-4">{errorMessage}</div> : null}
 
 				<div className="row g-4">
 					<div className="col-12 col-lg-5">
@@ -94,23 +152,28 @@ export function ReceiptSummary() {
 							>
 								<img
 									src={receiptImage}
-									alt={`Receipt preview ${receiptId}`}
+									alt={`Receipt preview ${receiptId || 'unknown'}`}
 									className="img-fluid rounded-4 border shadow-sm w-100"
 									style={{ cursor: 'zoom-in' }}
 								/>
 							</button>
 
 							<div className="d-flex flex-wrap gap-2">
-								<a className="btn btn-primary" href={receiptImage} download={`receipt-${receiptId}.svg`}>
+								<a className="btn btn-primary" href={receiptImage} download={`receipt-${receiptId || 'image'}.svg`}>
 									Download picture
 								</a>
-								<button type="button" className="btn btn-outline-danger" onClick={handleDeleteReceipt}>
-									Delete receipt
+								<button
+									type="button"
+									className="btn btn-outline-danger"
+									onClick={handleDeleteReceipt}
+									disabled={isDeleting}
+								>
+									{isDeleting ? 'Deleting...' : 'Delete receipt'}
 								</button>
 							</div>
 
 							<div className="p-3 bg-light border rounded-3 small text-secondary">
-								Tap the image to expand it. This is dummy data for now.
+								Tap the image to expand it. The page is now backed by /receipts/{receiptId || 'someId'}.
 							</div>
 						</div>
 					</div>
@@ -122,33 +185,45 @@ export function ReceiptSummary() {
 									<p className="text-uppercase text-secondary fw-semibold mb-2">Items</p>
 									<h2 className="h3 mb-0">Receipt breakdown</h2>
 								</div>
-								<div className="badge text-bg-dark fs-6">{formatCurrency(total)}</div>
+								<div className="badge text-bg-dark fs-6">
+									{formatCurrency(parseAmount(receipt?.totalAmount) || total, currency)}
+								</div>
 							</div>
 
 							<div className="list-group list-group-flush mb-4">
-								{dummyReceiptItems.map((item) => {
-									const lineTotal = item.quantity * item.price
+								{receiptItems.length === 0 ? (
+									<div className="list-group-item px-0 py-3 text-secondary">
+										No extracted items were returned for this receipt.
+									</div>
+								) : (
+									receiptItems.map((item, index) => {
+										const quantity = parseAmount(item.quantity)
+										const price = parseAmount(item.price)
+										const lineTotal = quantity * price
 
-									return (
-										<div key={item.name} className="list-group-item px-0 py-3 d-flex justify-content-between align-items-start gap-3">
-											<div>
-												<div className="fw-semibold">{item.name}</div>
-												<div className="text-secondary small">Qty {item.quantity} · {formatCurrency(item.price)} each</div>
+										return (
+											<div key={`${item.name || 'item'}-${index}`} className="list-group-item px-0 py-3 d-flex justify-content-between align-items-start gap-3">
+												<div>
+													<div className="fw-semibold">{item.name || 'Item'}</div>
+													<div className="text-secondary small">
+														Qty {quantity || 1} · {formatCurrency(price || lineTotal, currency)} each
+													</div>
+												</div>
+												<div className="fw-semibold text-nowrap">{formatCurrency(lineTotal || price, currency)}</div>
 											</div>
-											<div className="fw-semibold text-nowrap">{formatCurrency(lineTotal)}</div>
-										</div>
-									)
-								})}
+										)
+									})
+								)}
 							</div>
 
 							<div className="p-4 bg-light border rounded-4 d-flex justify-content-between align-items-center">
 								<div>
 									<div className="text-secondary small text-uppercase fw-semibold">Total</div>
-									<div className="h3 mb-0">{formatCurrency(total)}</div>
+									<div className="h3 mb-0">{formatCurrency(parseAmount(receipt?.totalAmount) || total, currency)}</div>
 								</div>
 								<div className="text-end text-secondary small">
-									<div>Tax included</div>
-									<div>Dummy receipt data</div>
+									<div>{receipt?.merchantName || 'Dummy receipt data'}</div>
+									<div>{receipt?.receiptDate || 'No receipt date'}</div>
 								</div>
 							</div>
 						</div>
@@ -169,7 +244,7 @@ export function ReceiptSummary() {
 						</div>
 						<img
 							src={receiptImage}
-							alt={`Expanded receipt preview ${receiptId}`}
+							alt={`Expanded receipt preview ${receiptId || 'unknown'}`}
 							className="img-fluid rounded-4 border"
 							style={{ maxHeight: '80vh' }}
 						/>

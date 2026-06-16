@@ -22,6 +22,7 @@ export class StorageConstruct extends Construct {
   public readonly getReceiptLambda: Function;
   public readonly deleteReceiptLambda: Function;
   public readonly getReceiptsSummaryLambda: Function;
+  public readonly getReceiptDetailedSummaryLambda: Function;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -82,7 +83,7 @@ export class StorageConstruct extends Construct {
       timeout: Duration.seconds(30),
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
-        BEDROCK_MODEL_ID: "amazon.nova-lite-v1:0",
+        BEDROCK_MODEL_ID: "eu.amazon.nova-lite-v1:0",
       },
     });
 
@@ -147,5 +148,22 @@ export class StorageConstruct extends Construct {
       },
     });
     this.receiptsTable.grantReadData(this.getReceiptsSummaryLambda);
+    this.bucket.grantRead(this.getReceiptsSummaryLambda, "uploads/*");
+
+    this.getReceiptDetailedSummaryLambda = new Function(
+      this,
+      "GetReceiptDetailedSummaryLambda",
+      {
+        runtime: Runtime.PYTHON_3_12,
+        handler: "receiptDetailedSummary.handler",
+        code: Code.fromAsset(path.join(__dirname, "lambdas")),
+        environment: {
+          RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+        },
+      },
+    );
+    
+    this.receiptsTable.grantReadData(this.getReceiptDetailedSummaryLambda);
+    this.bucket.grantRead(this.getReceiptDetailedSummaryLambda, "uploads/*");
   }
 }
