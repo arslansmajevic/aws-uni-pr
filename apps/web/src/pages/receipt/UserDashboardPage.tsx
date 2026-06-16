@@ -221,6 +221,12 @@ export function UserDashboardPage() {
 													>
 														👁️ View
 													</button>
+													<Link 
+														to={`/receipt?id=${encodeURIComponent(item.receiptId)}`}
+														className="btn btn-sm btn-outline-secondary"
+													>
+														Summary
+													</Link>
 													<button 
 														type="button" 
 														className="btn btn-sm btn-outline-danger"

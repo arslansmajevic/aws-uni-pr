@@ -6,6 +6,7 @@ import { RegisterPage } from './pages/auth/RegisterPage'
 import { UserPage } from './pages/user/UserPage'
 import { ReceiptUploadPage } from './pages/receipt/ReceiptUploadPage'
 import { UserDashboardPage } from './pages/receipt/UserDashboardPage'
+import { ReceiptSummary } from './pages/receipt/ReceiptSummary'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 function App() {
@@ -38,6 +39,14 @@ function App() {
         element={
           <ProtectedRoute>
             <UserDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/receipt"
+        element={
+          <ProtectedRoute>
+            <ReceiptSummary />
           </ProtectedRoute>
         }
       />
