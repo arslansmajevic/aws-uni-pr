@@ -44,6 +44,7 @@ export class StorageConstruct extends Construct {
         allowedMethods: [HttpMethods.GET],
         allowedOrigins: ["*"], 
         allowedHeaders: ["*"],
+        maxAge: 300,
       },
     ],
       removalPolicy: RemovalPolicy.DESTROY,
@@ -168,6 +169,7 @@ export class StorageConstruct extends Construct {
         code: Code.fromAsset(path.join(__dirname, "lambdas")),
         environment: {
           RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+          BUCKET_NAME: this.bucket.bucketName,
         },
       },
     );

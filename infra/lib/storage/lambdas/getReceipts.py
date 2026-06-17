@@ -9,7 +9,7 @@ table = dynamodb.Table(os.environ["RECEIPTS_TABLE_NAME"])
 
 s3_client = boto3.client(
     "s3", 
-    region_name="eu-central-1", 
+    region_name=os.environ.get("AWS_REGION", "eu-central-1"),
     config=Config(signature_version="s3v4")
 )
 

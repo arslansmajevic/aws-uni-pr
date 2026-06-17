@@ -114,6 +114,31 @@ export function ReceiptSummary() {
 		}
 	}
 
+	async function handleDownload() {
+		if (!receiptImage) return
+		try {
+			const response = await fetch(receiptImage, {
+				mode: 'cors',
+				cache: 'no-store',
+			})
+			if (!response.ok) {
+				throw new Error(`Request failed with status ${response.status}`)
+			}
+			const blob = await response.blob()
+			const blobUrl = window.URL.createObjectURL(blob)
+			const link = document.createElement('a')
+			link.href = blobUrl
+			link.download = `receipt-${receiptId || 'image'}.jpg`
+			document.body.appendChild(link)
+			link.click()
+			document.body.removeChild(link)
+			window.URL.revokeObjectURL(blobUrl)
+		} catch (error) {
+			window.alert('Failed to download image. Please try again.')
+			console.error('Download error:', error)
+		}
+	}
+
 	if (isLoading) {
 		return (
 			<main className="min-vh-100 bg-light d-flex align-items-center justify-content-center">
@@ -159,9 +184,9 @@ export function ReceiptSummary() {
 							</button>
 
 							<div className="d-flex flex-wrap gap-2">
-								<a className="btn btn-primary" href={receiptImage} download={`receipt-${receiptId || 'image'}.svg`}>
+								<button type="button" className="btn btn-primary" onClick={handleDownload}>
 									Download picture
-								</a>
+								</button>
 								<button
 									type="button"
 									className="btn btn-outline-danger"
