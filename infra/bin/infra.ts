@@ -7,15 +7,15 @@ const app = new cdk.App();
 
 const infraStack = new InfraStack(app, "InfraStack", {
   env: {
-    account: "000000000000",
-    region: "us-east-1",
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: "eu-central-1",
   },
 });
 
 const frontendStack = new FrontendStack(app, "FrontendStack", {
   env: {
-    account: "000000000000",
-    region: "us-east-1",
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: "eu-central-1",
   },
   apiUrl: infraStack.apiUrl,
 });

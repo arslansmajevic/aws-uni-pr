@@ -33,6 +33,13 @@ def handler(event, context):
             UserPoolId=os.environ['USER_POOL_ID'],
             Username=email
         )
+        client.admin_update_user_attributes(
+            UserPoolId=os.environ['USER_POOL_ID'],
+            Username=email,
+            UserAttributes=[
+                {'Name': 'email_verified', 'Value': 'true'}
+            ]
+        )
         return {
             'statusCode': 200,
             'headers': {**CORS_HEADERS, 'Content-Type': 'application/json'},

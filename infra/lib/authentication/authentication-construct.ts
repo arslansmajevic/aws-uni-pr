@@ -15,6 +15,9 @@ export class AuthenticationConstruct extends Construct {
   public readonly loginLambda: Function;
   public readonly listUsersLambda: Function;
   public readonly refreshTokenLambda: Function;
+  public readonly changePasswordLambda: Function;
+public readonly forgotPasswordLambda: Function;
+public readonly confirmForgotPasswordLambda: Function;
 
   constructor(scope: Construct, id: string, postConformationLambda?: Function) {
     super(scope, id);
@@ -113,5 +116,43 @@ export class AuthenticationConstruct extends Construct {
       identitySource: "method.request.header.Authorization",
     });
 
+    this.changePasswordLambda = new Function(this, "ChangePasswordLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "changePassword.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+    });
+
+    this.changePasswordLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["cognito-idp:ChangePassword"],
+      resources: ["*"],
+    }));
+
+    this.forgotPasswordLambda = new Function(this, "ForgotPasswordLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "forgotPassword.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+      environment: {
+        CLIENT_ID: this.userPoolClient.userPoolClientId,
+      },
+    });
+
+    this.forgotPasswordLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["cognito-idp:ForgotPassword"],
+      resources: ["*"],
+    }));
+
+    this.confirmForgotPasswordLambda = new Function(this, "ConfirmForgotPasswordLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "confirmForgotPassword.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+      environment: {
+        CLIENT_ID: this.userPoolClient.userPoolClientId,
+      },
+    });
+
+    this.confirmForgotPasswordLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["cognito-idp:ConfirmForgotPassword"],
+      resources: ["*"],
+    }));
   }
 }

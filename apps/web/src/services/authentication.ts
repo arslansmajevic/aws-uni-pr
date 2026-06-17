@@ -255,3 +255,77 @@ export function logout(): void {
 	localStorage.removeItem('refreshToken')
 	localStorage.removeItem('expiresIn')
 }
+
+export type ChangePasswordRequest = {
+	previousPassword: string
+	newPassword: string
+}
+
+export async function changePassword(payload: ChangePasswordRequest): Promise<void> {
+	const config = await loadConfig()
+	const token = await getValidIdToken()
+
+	// Cognito's ChangePassword call needs the access token, not the id token,
+	// so we read it directly from storage here rather than via getValidIdToken.
+	const accessToken = localStorage.getItem('accessToken')
+
+	if (!token || !accessToken) {
+		throw new Error('Not authenticated')
+	}
+
+	const response = await fetch(buildUrl(config.apiUrl, 'change-password'), {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Authorization': accessToken,
+		},
+		body: JSON.stringify(payload),
+	})
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({}))
+		throw new Error(errorData.message || 'Failed to change password')
+	}
+}
+
+export type ForgotPasswordRequest = {
+	email: string
+}
+
+export async function requestPasswordReset(payload: ForgotPasswordRequest): Promise<void> {
+	const config = await loadConfig()
+	const response = await fetch(buildUrl(config.apiUrl, 'forgot-password'), {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(payload),
+	})
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({}))
+		throw new Error(errorData.message || 'Failed to request password reset')
+	}
+}
+
+export type ConfirmPasswordResetRequest = {
+	email: string
+	confirmationCode: string
+	newPassword: string
+}
+
+export async function confirmPasswordReset(payload: ConfirmPasswordResetRequest): Promise<void> {
+	const config = await loadConfig()
+	const response = await fetch(buildUrl(config.apiUrl, 'confirm-forgot-password'), {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(payload),
+	})
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({}))
+		throw new Error(errorData.message || 'Failed to reset password')
+	}
+}

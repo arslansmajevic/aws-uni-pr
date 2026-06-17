@@ -45,6 +45,21 @@ export class InfraStack extends cdk.Stack {
           resourcePath: "refresh",
         },
         {
+          function: authenticationConstruct.changePasswordLambda,
+          method: "POST",
+          resourcePath: "change-password",
+        },
+        {
+          function: authenticationConstruct.forgotPasswordLambda,
+          method: "POST",
+          resourcePath: "forgot-password",
+        },
+        {
+          function: authenticationConstruct.confirmForgotPasswordLambda,
+          method: "POST",
+          resourcePath: "confirm-forgot-password",
+        },
+        {
           function: authenticationConstruct.listUsersLambda,
           method: "GET",
           resourcePath: "users",

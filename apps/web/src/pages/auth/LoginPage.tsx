@@ -91,6 +91,9 @@ export function LoginPage() {
               </form>
 
               <div className="mt-3">
+                <Link to="/forgot-password" className="link-secondary text-decoration-none">
+                  Forgot password?
+                </Link>
                 <Link to="/register" className="link-primary text-decoration-none me-3">
                   Create an account
                 </Link>

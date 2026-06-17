@@ -195,14 +195,14 @@ export function UserPage() {
                                     <div className="p-4 bg-light border rounded-4 h-100">
                                         <h3 className="h5 mb-2">Change password</h3>
                                         <p className="text-secondary small mb-3">Update your account credentials after validating your active session token.</p>
-                                        <button type="button" className="btn btn-primary btn-sm">Open form</button>
+                                        <Link to="/change-password" className="btn btn-primary btn-sm">Open form</Link>
                                     </div>
                                 </div>
                                 <div className="col-12 col-md-6">
                                     <div className="p-4 bg-light border rounded-4 h-100">
                                         <h3 className="h5 mb-2">Reset password</h3>
                                         <p className="text-secondary small mb-3">Initiate an out-of-band account recovery flow using secure Cognito email challenges.</p>
-                                        <button type="button" className="btn btn-outline-primary btn-sm">Send link</button>
+                                        <Link to="/forgot-password" className="btn btn-outline-primary btn-sm">Send link</Link>
                                     </div>
                                 </div>
                             </div>

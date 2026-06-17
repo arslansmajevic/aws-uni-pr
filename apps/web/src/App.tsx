@@ -8,6 +8,8 @@ import { ReceiptUploadPage } from './pages/receipt/ReceiptUploadPage'
 import { UserDashboardPage } from './pages/receipt/UserDashboardPage'
 import { ReceiptSummary } from './pages/receipt/ReceiptSummary'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { ChangePasswordPage } from './pages/user/ChangePasswordPage'
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
 
 function App() {
   return (
@@ -47,6 +49,15 @@ function App() {
         element={
           <ProtectedRoute>
             <ReceiptSummary />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute>
+            <ChangePasswordPage />
           </ProtectedRoute>
         }
       />
