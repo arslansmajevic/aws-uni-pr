@@ -13,6 +13,7 @@ import { Table, AttributeType, BillingMode } from "aws-cdk-lib/aws-dynamodb";
 import { Construct } from "constructs";
 import * as path from "path";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
+import * as cdk from "aws-cdk-lib";
 
 export class StorageConstruct extends Construct {
   public readonly bucket: Bucket;
@@ -119,12 +120,20 @@ export class StorageConstruct extends Construct {
 
     processReceiptLambda.addToRolePolicy(new PolicyStatement({
       actions: ["bedrock:InvokeModel"],
-      resources: ["*"],
+      resources: [
+        `arn:aws:bedrock:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:inference-profile/eu.amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:eu-west-1::foundation-model/amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:eu-west-3::foundation-model/amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:eu-central-1::foundation-model/amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:eu-north-1::foundation-model/amazon.nova-lite-v1:0`,
+      ],
     }));
 
     processReceiptLambda.addToRolePolicy(new PolicyStatement({
       actions: ["secretsmanager:GetSecretValue"],
-      resources: ["*"],
+      resources: [
+        `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:plaid/*`,
+      ],
     }));
 
     this.deleteReceiptLambda = new Function(this, "DeleteReceiptLambda", {

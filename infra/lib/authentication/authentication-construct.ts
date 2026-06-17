@@ -62,8 +62,9 @@ public readonly confirmForgotPasswordLambda: Function;
         "cognito-idp:SignUp",
         "cognito-idp:AdminCreateUser",
         "cognito-idp:AdminConfirmSignUp",
+        "cognito-idp:AdminUpdateUserAttributes",
       ],
-      resources: ["*"],
+      resources: [this.userPool.userPoolArn],
     }));
 
 
@@ -79,7 +80,7 @@ public readonly confirmForgotPasswordLambda: Function;
 
     this.loginLambda.addToRolePolicy(new PolicyStatement({
       actions: ["cognito-idp:InitiateAuth"],
-      resources: ["*"],
+      resources: [this.userPool.userPoolArn],
     }));
 
     this.listUsersLambda = new Function(this, "ListUsersLambda", {
@@ -93,7 +94,7 @@ public readonly confirmForgotPasswordLambda: Function;
 
     this.listUsersLambda.addToRolePolicy(new PolicyStatement({
       actions: ["cognito-idp:ListUsers"],
-      resources: ["*"],
+      resources: [this.userPool.userPoolArn],
     }));
 
     this.refreshTokenLambda = new Function(this, "RefreshTokenLambda", {
@@ -108,7 +109,7 @@ public readonly confirmForgotPasswordLambda: Function;
 
     this.refreshTokenLambda.addToRolePolicy(new PolicyStatement({
       actions: ["cognito-idp:InitiateAuth"],
-      resources: ["*"],
+      resources: [this.userPool.userPoolArn],
     }));
 
     this.authorizer = new CognitoUserPoolsAuthorizer(this, "CognitoAuthorizer", {

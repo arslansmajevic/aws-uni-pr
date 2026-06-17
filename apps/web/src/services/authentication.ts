@@ -254,6 +254,7 @@ export function logout(): void {
 	localStorage.removeItem('idToken')
 	localStorage.removeItem('refreshToken')
 	localStorage.removeItem('expiresIn')
+	localStorage.removeItem('isBankConnected')
 }
 
 export type ChangePasswordRequest = {
