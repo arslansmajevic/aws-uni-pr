@@ -15,19 +15,38 @@ export function UserDashboardPage() {
 		setIsBankConnected(localStorage.getItem('isBankConnected') === 'true')
 	}, [])
 
-	async function loadData() {
+	useEffect(() => {
+		const hasProcessingReceipts = receipts.some(r => r.processingStatus === 'PROCESSING')
+		if (!hasProcessingReceipts) {
+			return
+		}
+
+		// Poll every 3 seconds while at least one receipt is still being
+		// processed, so the status updates automatically without the user
+		// needing to manually refresh the page.
+		const intervalId = window.setInterval(() => {
+			loadData({ silent: true })
+		}, 3000)
+
+		return () => window.clearInterval(intervalId)
+	}, [receipts])
+
+	async function loadData(options: { silent?: boolean } = {}) {
 		try {
-			setIsLoading(true)
+			if (!options.silent) {
+				setIsLoading(true)
+			}
 			setErrorMessage(null)
 			const dbReceipts = await getReceipts()
-			
-			console.log("data from db:", dbReceipts); 
-			
 			setReceipts(dbReceipts)
 		} catch (err) {
-			setErrorMessage('Failed to load receipts from live AWS database.')
+			if (!options.silent) {
+				setErrorMessage('Failed to load receipts from live AWS database.')
+			}
 		} finally {
-			setIsLoading(false)
+			if (!options.silent) {
+				setIsLoading(false)
+			}
 		}
 	}
 
@@ -263,7 +282,7 @@ export function UserDashboardPage() {
 										<div className="h5 mb-0 text-warning">{processingReceipts}</div>
 									</div>
 								</div>
-								<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={loadData}>
+								<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={() => loadData()}>
 									🔄 Refresh Timeline
 								</button>
 							</div>
