@@ -85,7 +85,7 @@ export class StorageConstruct extends Construct {
       timeout: Duration.seconds(60),
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
-        BEDROCK_MODEL_ID: "anthropic.claude-3-haiku-20240307-v1:0",
+        BEDROCK_MODEL_ID: "amazon.nova-pro-v1:0",
       },
     });
 
