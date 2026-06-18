@@ -122,11 +122,11 @@ export class StorageConstruct extends Construct {
     processReceiptLambda.addToRolePolicy(new PolicyStatement({
       actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
       resources: [
-        `arn:aws:bedrock:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:inference-profile/eu.anthropic.*`,
-        `arn:aws:bedrock:eu-west-1::foundation-model/anthropic.*`,
-        `arn:aws:bedrock:eu-west-3::foundation-model/anthropic.*`,
-        `arn:aws:bedrock:eu-central-1::foundation-model/anthropic.*`,
-        `arn:aws:bedrock:eu-north-1::foundation-model/anthropic.*`,
+        `arn:aws:bedrock:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:inference-profile/eu.*`,
+        `arn:aws:bedrock:eu-west-1::foundation-model/*`,
+        `arn:aws:bedrock:eu-west-3::foundation-model/*`,
+        `arn:aws:bedrock:eu-central-1::foundation-model/*`,
+        `arn:aws:bedrock:eu-north-1::foundation-model/*`,
       ],
     }));
 
