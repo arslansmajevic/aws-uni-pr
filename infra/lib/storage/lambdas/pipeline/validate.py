@@ -54,7 +54,7 @@ def validate_date(value):
 
     try:
         parsed = datetime.strptime(value, "%Y-%m-%d")
-        if parsed.year < 2000 or parsed > datetime.now():
+        if parsed.year < 2000 or parsed.date() > datetime.now(timezone.utc).date():
             return False, f"Date out of reasonable range: {value}"
         return True, None
     except ValueError:
