@@ -194,6 +194,7 @@ Rules:
   "tipAmount": "numeric string or null",
   "currency": "3-letter ISO code or null (e.g., CHF, EUR, USD)",
   "paymentMethod": "string or null (e.g., VISA, Mastercard, Cash)",
+  "category": "one of: Groceries, Dining, Entertainment, Transport, Health, Shopping, Utilities, Other",
   "receiptItems": [
     {"name": "string", "quantity": "string or null", "price": "numeric string or null"}
   ]
@@ -228,7 +229,7 @@ Rules:
                 modelId=BEDROCK_MODEL_ID,
                 system=[{"text": system_prompt}],
                 messages=messages,
-                inferenceConfig={"maxTokens": 4096, "temperature": 0.0},
+                inferenceConfig={"maxTokens": 1500, "temperature": 0.0},
             )
 
             stop_reason = bedrock_response.get("stopReason", "unknown")
@@ -293,5 +294,6 @@ Rules:
         "rawExtractionKey": raw_extraction_key,
         "extractedAt": now_iso(),
         "textractResult": textract_result,
+        "rawCategory": extracted_data.get("category"),
     }
 

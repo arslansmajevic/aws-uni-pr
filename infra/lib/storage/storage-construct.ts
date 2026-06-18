@@ -88,7 +88,8 @@ export class StorageConstruct extends Construct {
       runtime: Runtime.PYTHON_3_12,
       handler: "extract_ocr.handler",
       code: Code.fromAsset(pipelineLambdasPath),
-      timeout: Duration.seconds(60),
+      timeout: Duration.seconds(120),
+      memorySize: 512,
       environment: {
         BUCKET_NAME: this.bucket.bucketName,
         BEDROCK_MODEL_ID: "eu.amazon.nova-pro-v1:0",
@@ -99,10 +100,8 @@ export class StorageConstruct extends Construct {
       runtime: Runtime.PYTHON_3_12,
       handler: "normalize.handler",
       code: Code.fromAsset(pipelineLambdasPath),
-      timeout: Duration.seconds(30),
-      environment: {
-        BEDROCK_MODEL_ID: "eu.amazon.nova-pro-v1:0",
-      },
+      timeout: Duration.seconds(60),
+      memorySize: 256,
     });
 
     const validateLambda = new Function(this, "ValidateLambda", {
@@ -144,19 +143,6 @@ export class StorageConstruct extends Construct {
     const account = cdk.Stack.of(this).account;
 
     extractOcrLambda.addToRolePolicy(
-      new PolicyStatement({
-        actions: ["bedrock:InvokeModel*"],
-        resources: [
-          `arn:aws:bedrock:${bedrockRegion}:${account}:inference-profile/eu.amazon.nova-pro-v1:0`,
-          `arn:aws:bedrock:eu-central-1::foundation-model/*`,
-          `arn:aws:bedrock:eu-north-1::foundation-model/*`,
-          `arn:aws:bedrock:eu-west-1::foundation-model/*`,
-          `arn:aws:bedrock:eu-west-3::foundation-model/*`,
-        ],
-      })
-    );
-
-    normalizeLambda.addToRolePolicy(
       new PolicyStatement({
         actions: ["bedrock:InvokeModel*"],
         resources: [

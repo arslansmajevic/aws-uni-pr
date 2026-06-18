@@ -1,20 +1,14 @@
 """
 Stage 2: Normalize Textract AnalyzeExpense output into canonical receipt schema.
 
-Maps Textract expense fields deterministically. Uses Bedrock only for
-category classification when the merchant type is ambiguous.
+Maps Textract expense fields deterministically. Reads the category that was
+already classified by the extraction stage (Bedrock vision call) so no
+additional model call is needed here.
 """
 
 import os
 import re
-import json
-import boto3
-import time
 from datetime import datetime, timezone
-
-bedrock = boto3.client("bedrock-runtime", region_name="eu-central-1")
-
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "eu.amazon.nova-pro-v1:0")
 
 CATEGORIES = [
     "Groceries",
@@ -185,50 +179,14 @@ def extract_line_items(textract_result):
     return items[:50]
 
 
-def classify_category(merchant_name, items):
-    """Use Bedrock to classify the receipt category based on merchant and items."""
-    if not merchant_name and not items:
-        return "Other"
-
-    items_text = ", ".join(
-        item.get("name", "") for item in (items or [])[:10] if item.get("name")
-    )
-
-    prompt = (
-        f"Classify this receipt into exactly one category.\n"
-        f"Merchant: {merchant_name or 'Unknown'}\n"
-        f"Items: {items_text or 'Not available'}\n\n"
-        f"Valid categories: {', '.join(CATEGORIES)}\n\n"
-        f"Respond with ONLY the category name, nothing else."
-    )
-
-    for attempt in range(3):
-        try:
-            response = bedrock.converse(
-                modelId=BEDROCK_MODEL_ID,
-                messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig={"maxTokens": 50, "temperature": 0.0},
-            )
-
-            category = (
-                response["output"]["message"]["content"][0]["text"].strip()
-            )
-
-            if category in CATEGORIES:
-                return category
-
-            for cat in CATEGORIES:
-                if cat.lower() in category.lower():
-                    return cat
-
-            print(f"[Normalize] Model returned invalid category: '{category}'")
-            return "Other"
-
-        except Exception as e:
-            print(f"[Normalize] Category classification attempt {attempt + 1} failed: {e}")
-            if attempt < 2:
-                time.sleep(2 ** attempt)
-
+def get_category_from_extraction(raw_category):
+    """Return the category extracted by the OCR stage, falling back to 'Other'."""
+    if raw_category in CATEGORIES:
+        return raw_category
+    if raw_category:
+        for cat in CATEGORIES:
+            if cat.lower() in str(raw_category).lower():
+                return cat
     return "Other"
 
 
@@ -268,9 +226,8 @@ def handler(event, context):
         ],
     }
 
-    category = classify_category(
-        normalized.get("merchantName"),
-        line_items,
+    category = get_category_from_extraction(
+        event.get("rawCategory"),
     )
     normalized["category"] = category
 
