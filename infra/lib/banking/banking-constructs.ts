@@ -7,7 +7,9 @@ import * as cdk from "aws-cdk-lib";
 export class BankingConstruct extends Construct {
   public readonly createLinkTokenLambda: Function;
   public readonly exchangeTokenLambda: Function;
-
+  public readonly disconnectBankLambda: Function;
+  public readonly getBankStatusLambda: Function;
+  
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
@@ -38,6 +40,32 @@ export class BankingConstruct extends Construct {
       ],
       resources: [
         `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:plaid/*`,
+      ],
+    }));
+
+    this.disconnectBankLambda = new Function(this, "DisconnectBankLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "disconnectBank.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+    });
+
+    this.disconnectBankLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["secretsmanager:DeleteSecret"],
+      resources: [
+        `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:plaid/access-token/*`,
+      ],
+    }));
+
+    this.getBankStatusLambda = new Function(this, "GetBankStatusLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "getBankStatus.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+    });
+
+    this.getBankStatusLambda.addToRolePolicy(new PolicyStatement({
+      actions: ["secretsmanager:DescribeSecret"],
+      resources: [
+        `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:plaid/access-token/*`,
       ],
     }));
   }

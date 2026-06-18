@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getValidUserClaims, logout } from '../../services/authentication'
-import { getPlaidLinkToken, exchangePlaidPublicToken } from '../../services/banking'
+import { getPlaidLinkToken, exchangePlaidPublicToken, disconnectBank, getBankStatus } from '../../services/banking'
 
 type UserInfo = {
     givenName: string
@@ -42,24 +42,30 @@ export function UserPage() {
                 userId: claims.sub || claims.cognito_username || 'unknown',
             })
 
-            setIsBankConnected(localStorage.getItem('isBankConnected') === 'true')
             setIsLoading(false)
+            setIsBankConnected(localStorage.getItem('isBankConnected') === 'true')
+            
+            const updatedAt = Number(localStorage.getItem('bankStatusUpdatedAt') || '0')
+            const isRecentLocalChange = Date.now() - updatedAt < 5000
 
-            const script = document.createElement('script')
-            script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js'
-            script.async = true
-            document.head.appendChild(script)
-
-            return () => {
-                document.head.removeChild(script)
+            try {
+                const connected = await getBankStatus()
+                if (isMounted && !isRecentLocalChange) {
+                    setIsBankConnected(connected)
+                }
+            } catch {
+                // If the status check fails (e.g. transient network error), fall back
+                // to the last known local value rather than blocking the page.
+                if (isMounted) {
+                    setIsBankConnected(localStorage.getItem('isBankConnected') === 'true')
+                }
             }
         }
 
-        const cleanupPromise = initializeUserPage()
+        initializeUserPage()
 
         return () => {
             isMounted = false
-            cleanupPromise.catch(() => undefined)
         }
     }, [navigate])
 
@@ -82,6 +88,7 @@ export function UserPage() {
                         await exchangePlaidPublicToken(publicToken)
                         
                         localStorage.setItem('isBankConnected', 'true')
+                        localStorage.setItem('bankStatusUpdatedAt', Date.now().toString())
                         setIsBankConnected(true)
                         alert(`Successfully authenticated with ${metadata.institution?.name || 'Bank'} via AWS OAuth!`)
                     } catch (exchangeErr) {
@@ -102,10 +109,22 @@ export function UserPage() {
         }
     }
 
-    function handleDisconnectBank() {
-        if (window.confirm("Disconnect your bank and clear credentials?")) {
+    async function handleDisconnectBank() {
+        if (!window.confirm("Disconnect your bank and clear credentials?")) {
+            return
+        }
+
+        try {
+            setPlaidLoading(true)
+            setPlaidError(null)
+            await disconnectBank()
             localStorage.removeItem('isBankConnected')
+            localStorage.setItem('bankStatusUpdatedAt', Date.now().toString())
             setIsBankConnected(false)
+        } catch (err) {
+            setPlaidError(err instanceof Error ? err.message : 'Failed to disconnect bank account.')
+        } finally {
+            setPlaidLoading(false)
         }
     }
 
@@ -165,7 +184,7 @@ export function UserPage() {
                                 )}
 
                                 {isBankConnected ? (
-                                    <button type="button" className="btn btn-outline-danger w-100 btn-sm" onClick={handleDisconnectBank}>
+                                    <button type="button" className="btn btn-outline-danger w-100 btn-sm" onClick={handleDisconnectBank} disabled={plaidLoading}>
                                         Disconnect Account Feed
                                     </button>
                                 ) : (

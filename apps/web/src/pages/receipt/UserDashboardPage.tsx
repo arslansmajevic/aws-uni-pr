@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getReceipts, deleteReceipt } from '../../services/receipts'
+import { getBankStatus } from '../../services/banking'
 
 export function UserDashboardPage() {
 	const [receipts, setReceipts] = useState<any[]>([])
@@ -13,7 +14,20 @@ export function UserDashboardPage() {
 	
 	useEffect(() => {
 		loadData()
-		setIsBankConnected(localStorage.getItem('isBankConnected') === 'true')
+
+		const cachedValue = localStorage.getItem('isBankConnected') === 'true'
+		setIsBankConnected(cachedValue)
+
+		const updatedAt = Number(localStorage.getItem('bankStatusUpdatedAt') || '0')
+		const isRecentLocalChange = Date.now() - updatedAt < 5000
+
+		getBankStatus()
+			.then(connected => {
+				if (!isRecentLocalChange) {
+					setIsBankConnected(connected)
+				}
+			})
+			.catch(err => console.log('[DIAGNOSE] getBankStatus failed:', err))
 	}, [])
 
 	useEffect(() => {

@@ -71,3 +71,44 @@ export async function exchangePlaidPublicToken(publicToken: string): Promise<voi
 		throw new Error(errData.message || 'Failed to exchange token')
 	}
 }
+
+export async function disconnectBank(): Promise<void> {
+	const config = await loadConfig()
+	const token = await getValidIdToken()
+
+	if (!token) throw new Error('Not authenticated')
+
+	const response = await fetch(`${config.apiUrl.replace(/\/$/, '')}/bank/disconnect`, {
+		method: 'POST',
+		headers: {
+			'Authorization': token,
+			'Content-Type': 'application/json'
+		}
+	})
+
+	if (!response.ok) {
+		const errData = await response.json().catch(() => ({}))
+		throw new Error(errData.message || 'Failed to disconnect bank account')
+	}
+}
+
+export async function getBankStatus(): Promise<boolean> {
+	const config = await loadConfig()
+	const token = await getValidIdToken()
+
+	if (!token) throw new Error('Not authenticated')
+
+	const response = await fetch(`${config.apiUrl.replace(/\/$/, '')}/bank/status`, {
+		method: 'GET',
+		headers: {
+			'Authorization': token,
+		}
+	})
+
+	if (!response.ok) {
+		throw new Error('Failed to fetch bank connection status')
+	}
+
+	const data = await response.json()
+	return Boolean(data.connected)
+}

@@ -101,6 +101,18 @@ export class InfraStack extends cdk.Stack {
           resourcePath: "bank/exchange",
           jwtRequired: jwtRequiredFlag,
         },
+        {
+          function: bankingConstruct.disconnectBankLambda,
+          method: "POST",
+          resourcePath: "bank/disconnect",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: bankingConstruct.getBankStatusLambda,
+          method: "GET",
+          resourcePath: "bank/status",
+          jwtRequired: jwtRequiredFlag,
+        },
       ],
       authenticationConstruct.authorizer,
     );
