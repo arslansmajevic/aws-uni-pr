@@ -82,10 +82,10 @@ export class StorageConstruct extends Construct {
       runtime: Runtime.PYTHON_3_12,
       handler: "processReceipt.handler",
       code: Code.fromAsset(path.join(__dirname, "lambdas")),
-      timeout: Duration.seconds(30),
+      timeout: Duration.seconds(60),
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
-        BEDROCK_MODEL_ID: "eu.amazon.nova-lite-v1:0",
+        BEDROCK_MODEL_ID: "eu.anthropic.claude-3-5-sonnet-20241022-v2:0",
       },
     });
 
@@ -120,13 +120,13 @@ export class StorageConstruct extends Construct {
     }));
 
     processReceiptLambda.addToRolePolicy(new PolicyStatement({
-      actions: ["bedrock:InvokeModel"],
+      actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
       resources: [
-        `arn:aws:bedrock:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:inference-profile/eu.amazon.nova-lite-v1:0`,
-        `arn:aws:bedrock:eu-west-1::foundation-model/amazon.nova-lite-v1:0`,
-        `arn:aws:bedrock:eu-west-3::foundation-model/amazon.nova-lite-v1:0`,
-        `arn:aws:bedrock:eu-central-1::foundation-model/amazon.nova-lite-v1:0`,
-        `arn:aws:bedrock:eu-north-1::foundation-model/amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:inference-profile/eu.anthropic.claude-3-5-sonnet-20241022-v2:0`,
+        `arn:aws:bedrock:eu-west-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0`,
+        `arn:aws:bedrock:eu-west-3::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0`,
+        `arn:aws:bedrock:eu-central-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0`,
+        `arn:aws:bedrock:eu-north-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0`,
       ],
     }));
 
