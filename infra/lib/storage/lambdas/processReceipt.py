@@ -19,6 +19,9 @@ bedrock = boto3.client("bedrock-runtime", region_name="eu-central-1")
 
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "eu.amazon.nova-lite-v1:0")
 
+MAX_FIELD_LENGTH = 200
+MAX_RECEIPT_ITEMS = 50
+
 CATEGORIES = [
     "Groceries",
     "Dining",
@@ -193,7 +196,7 @@ def parse_textract_expense(response):
 
         if field_type in ("VENDOR_NAME", "SUPPLIER_NAME", "NAME"):
             if not receipt_data["merchantName"]:
-                receipt_data["merchantName"] = value.strip()[:200]
+                receipt_data["merchantName"] = value.strip()[:MAX_FIELD_LENGTH]
 
         elif field_type in ("INVOICE_RECEIPT_DATE", "ORDER_DATE"):
             receipt_data["receiptDate"] = normalize_date(value)
@@ -214,7 +217,7 @@ def parse_textract_expense(response):
             receipt_data["tipAmount"] = clean_amount_string(value)
 
         elif field_type == "RECEIVER_ADDRESS" and not receipt_data["merchantName"]:
-            receipt_data["merchantName"] = value.strip()[:200]
+            receipt_data["merchantName"] = value.strip()[:MAX_FIELD_LENGTH]
 
     # Try to detect currency from amount fields
     for field in summary_fields:
@@ -233,8 +236,8 @@ def parse_textract_expense(response):
             if item:
                 receipt_data["receiptItems"].append(item)
 
-    # Limit to 50 items
-    receipt_data["receiptItems"] = receipt_data["receiptItems"][:50]
+    # Limit to configured maximum items
+    receipt_data["receiptItems"] = receipt_data["receiptItems"][:MAX_RECEIPT_ITEMS]
 
     return receipt_data
 
@@ -255,13 +258,13 @@ def parse_line_item(line_item):
             continue
 
         if field_type == "ITEM":
-            item_name = value.strip()[:200]
+            item_name = value.strip()[:MAX_FIELD_LENGTH]
         elif field_type == "QUANTITY":
             item_quantity = value.strip()
         elif field_type in ("PRICE", "UNIT_PRICE"):
             item_price = clean_amount_string(value)
         elif field_type == "EXPENSE_ROW" and not item_name:
-            item_name = value.strip()[:200]
+            item_name = value.strip()[:MAX_FIELD_LENGTH]
 
     if item_name is None and item_price is None:
         return None
@@ -514,9 +517,6 @@ def match_transaction(extracted, transactions):
             or txn.get("name")
             or ""
         ).lower().strip()
-
-        if receipt_amount == 0:
-            continue
 
         amount_difference_ratio = abs(txn_amount - receipt_amount) / receipt_amount
 
