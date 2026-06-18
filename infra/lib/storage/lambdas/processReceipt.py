@@ -18,7 +18,7 @@ s3_client = boto3.client("s3")
 bedrock = boto3.client("bedrock-runtime", region_name="eu-central-1")
 
 BEDROCK_MODEL_ID = os.environ.get(
-    "BEDROCK_MODEL_ID", "amazon.nova-pro-v1:0"
+    "BEDROCK_MODEL_ID", "eu.amazon.nova-pro-v1:0"
 )
 
 MAX_RETRIES = 2

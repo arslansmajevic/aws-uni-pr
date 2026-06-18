@@ -85,7 +85,7 @@ export class StorageConstruct extends Construct {
       timeout: Duration.seconds(60),
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
-        BEDROCK_MODEL_ID: "amazon.nova-pro-v1:0",
+        BEDROCK_MODEL_ID: "eu.amazon.nova-pro-v1:0",
       },
     });
 
@@ -119,16 +119,22 @@ export class StorageConstruct extends Construct {
       resources: ["*"],
     }));
 
-    processReceiptLambda.addToRolePolicy(new PolicyStatement({
-      actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
-      resources: [
-        `arn:aws:bedrock:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:inference-profile/eu.*`,
-        `arn:aws:bedrock:eu-west-1::foundation-model/*`,
-        `arn:aws:bedrock:eu-west-3::foundation-model/*`,
-        `arn:aws:bedrock:eu-central-1::foundation-model/*`,
-        `arn:aws:bedrock:eu-north-1::foundation-model/*`,
-      ],
-    }));
+    const bedrockRegion = "eu-central-1";
+    const account = cdk.Stack.of(this).account;
+
+    processReceiptLambda.addToRolePolicy(
+      new PolicyStatement({
+        actions: ["bedrock:InvokeModel*"],
+        resources: [
+          `arn:aws:bedrock:${bedrockRegion}:${account}:inference-profile/eu.amazon.nova-pro-v1:0`,
+
+          `arn:aws:bedrock:eu-central-1::foundation-model/amazon.nova-pro-v1:0`,
+          `arn:aws:bedrock:eu-north-1::foundation-model/amazon.nova-pro-v1:0`,
+          `arn:aws:bedrock:eu-west-1::foundation-model/amazon.nova-pro-v1:0`,
+          `arn:aws:bedrock:eu-west-3::foundation-model/amazon.nova-pro-v1:0`,
+        ],
+      }),
+    );
 
     processReceiptLambda.addToRolePolicy(new PolicyStatement({
       actions: ["secretsmanager:GetSecretValue"],
