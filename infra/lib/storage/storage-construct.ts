@@ -82,7 +82,8 @@ export class StorageConstruct extends Construct {
       runtime: Runtime.PYTHON_3_12,
       handler: "processReceipt.handler",
       code: Code.fromAsset(path.join(__dirname, "lambdas")),
-      timeout: Duration.seconds(30),
+      timeout: Duration.seconds(60),
+      memorySize: 512,
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
         BEDROCK_MODEL_ID: "eu.amazon.nova-lite-v1:0",
@@ -114,7 +115,6 @@ export class StorageConstruct extends Construct {
     processReceiptLambda.addToRolePolicy(new PolicyStatement({
       actions: [
         "textract:AnalyzeExpense",
-        "textract:DetectDocumentText",
       ],
       resources: ["*"],
     }));
