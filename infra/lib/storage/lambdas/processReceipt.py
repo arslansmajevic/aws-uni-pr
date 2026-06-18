@@ -18,7 +18,7 @@ s3_client = boto3.client("s3")
 bedrock = boto3.client("bedrock-runtime", region_name="eu-central-1")
 
 BEDROCK_MODEL_ID = os.environ.get(
-    "BEDROCK_MODEL_ID", "eu.anthropic.claude-3-5-sonnet-20241022-v2:0"
+    "BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"
 )
 
 MAX_RETRIES = 2
