@@ -260,6 +260,9 @@ def extract_json_from_text(text):
     """
     text = text.strip()
 
+    if not text:
+        raise ValueError("Model returned empty response")
+
     # Try direct JSON parse first.
     try:
         return json.loads(text)
@@ -287,7 +290,12 @@ def extract_json_from_text(text):
         except json.JSONDecodeError:
             pass
 
-    raise ValueError(f"Could not extract valid JSON from model response: {text[:200]}")
+    # Log full response for debugging truncated/malformed output.
+    print(f"[JSON EXTRACTION FAILED] Full model response ({len(text)} chars):\n{text}")
+    raise ValueError(
+        f"Could not extract valid JSON from model response "
+        f"(length={len(text)}, starts_with='{text[:100]}', ends_with='{text[-100:]}')"
+    )
 
 
 def process_image_with_bedrock(bucket, key):
@@ -362,14 +370,27 @@ Rules:
                 system=[{"text": system_prompt}],
                 messages=messages,
                 inferenceConfig={
-                    "maxTokens": 2048,
+                    "maxTokens": 4096,
                     "temperature": 0.0,
                 },
             )
 
+            stop_reason = bedrock_response.get("stopReason", "unknown")
             extracted_text = (
                 bedrock_response["output"]["message"]["content"][0]["text"]
             )
+
+            print(
+                f"[Bedrock] Model={BEDROCK_MODEL_ID}, "
+                f"stopReason={stop_reason}, "
+                f"responseLength={len(extracted_text)}"
+            )
+
+            if stop_reason == "max_tokens":
+                print(
+                    "[WARNING] Response was truncated due to max_tokens limit. "
+                    "JSON may be incomplete."
+                )
 
             result = extract_json_from_text(extracted_text)
             result = validate_extracted_data(result)
