@@ -125,7 +125,7 @@ public readonly confirmForgotPasswordLambda: Function;
 
     this.changePasswordLambda.addToRolePolicy(new PolicyStatement({
       actions: ["cognito-idp:ChangePassword"],
-      resources: ["*"],
+      resources: [this.userPool.userPoolArn],
     }));
 
     this.forgotPasswordLambda = new Function(this, "ForgotPasswordLambda", {
@@ -139,7 +139,7 @@ public readonly confirmForgotPasswordLambda: Function;
 
     this.forgotPasswordLambda.addToRolePolicy(new PolicyStatement({
       actions: ["cognito-idp:ForgotPassword"],
-      resources: ["*"],
+      resources: [this.userPool.userPoolArn],
     }));
 
     this.confirmForgotPasswordLambda = new Function(this, "ConfirmForgotPasswordLambda", {
@@ -153,7 +153,7 @@ public readonly confirmForgotPasswordLambda: Function;
 
     this.confirmForgotPasswordLambda.addToRolePolicy(new PolicyStatement({
       actions: ["cognito-idp:ConfirmForgotPassword"],
-      resources: ["*"],
+      resources: [this.userPool.userPoolArn],
     }));
   }
 }
