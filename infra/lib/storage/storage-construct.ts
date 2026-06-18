@@ -91,6 +91,7 @@ export class StorageConstruct extends Construct {
       timeout: Duration.seconds(60),
       environment: {
         BUCKET_NAME: this.bucket.bucketName,
+        BEDROCK_MODEL_ID: "eu.amazon.nova-pro-v1:0",
       },
     });
 
@@ -139,15 +140,21 @@ export class StorageConstruct extends Construct {
     this.receiptsTable.grantWriteData(saveLambda);
     this.receiptsTable.grantWriteData(errorHandlerLambda);
 
-    extractOcrLambda.addToRolePolicy(
-      new PolicyStatement({
-        actions: ["textract:AnalyzeExpense"],
-        resources: ["*"],
-      })
-    );
-
     const bedrockRegion = "eu-central-1";
     const account = cdk.Stack.of(this).account;
+
+    extractOcrLambda.addToRolePolicy(
+      new PolicyStatement({
+        actions: ["bedrock:InvokeModel*"],
+        resources: [
+          `arn:aws:bedrock:${bedrockRegion}:${account}:inference-profile/eu.amazon.nova-pro-v1:0`,
+          `arn:aws:bedrock:eu-central-1::foundation-model/*`,
+          `arn:aws:bedrock:eu-north-1::foundation-model/*`,
+          `arn:aws:bedrock:eu-west-1::foundation-model/*`,
+          `arn:aws:bedrock:eu-west-3::foundation-model/*`,
+        ],
+      })
+    );
 
     normalizeLambda.addToRolePolicy(
       new PolicyStatement({
