@@ -23,6 +23,7 @@ sys.path.insert(0, PIPELINE_DIR)
 os.environ.setdefault("BUCKET_NAME", "test-bucket")
 os.environ.setdefault("RECEIPTS_TABLE_NAME", "test-table")
 os.environ.setdefault("REPAIR_MODEL_ID", "eu.amazon.nova-pro-v1:0")
+os.environ.setdefault("AWS_DEFAULT_REGION", "eu-central-1")
 
 # ---------------------------------------------------------------------------
 # normalize.py tests
@@ -502,3 +503,175 @@ class TestDetectFormat(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Multi-image pipeline: preflight + extract_textract
+# ---------------------------------------------------------------------------
+
+from unittest.mock import patch, MagicMock, call
+from preflight import _validate_and_copy, handler as preflight_handler
+from extract_textract import _analyze_expense, handler as textract_handler
+
+
+class TestPreflightMultiImage(unittest.TestCase):
+    """Preflight handler supports a 'keys' array for multi-image receipts."""
+
+    def _make_s3(self, file_size=1024, fmt_header=b"\xff\xd8\xff" + b"\x00" * 13):
+        mock_s3 = MagicMock()
+        mock_s3.head_object.return_value = {"ContentLength": file_size}
+        body_mock = MagicMock()
+        body_mock.read.return_value = fmt_header
+        mock_s3.get_object.return_value = {"Body": body_mock}
+        mock_s3.copy_object.return_value = {}
+        return mock_s3
+
+    def test_single_key_produces_single_normalized_key(self):
+        event = {
+            "bucket": "test-bucket",
+            "key": "uploads/user1/receipt1/img.jpg",
+            "userId": "user1",
+            "receiptId": "receipt1",
+        }
+        with patch("preflight.s3_client", self._make_s3()):
+            result = preflight_handler(event, None)
+
+        self.assertIn("normalizedInputKey", result)
+        self.assertIn("normalizedInputKeys", result)
+        self.assertEqual(len(result["normalizedInputKeys"]), 1)
+        self.assertEqual(result["normalizedInputKey"], result["normalizedInputKeys"][0])
+
+    def test_keys_array_produces_multiple_normalized_keys(self):
+        event = {
+            "bucket": "test-bucket",
+            "key": "uploads/user1/receipt1/img-0.jpg",
+            "keys": [
+                "uploads/user1/receipt1/img-0.jpg",
+                "uploads/user1/receipt1/img-1.jpg",
+            ],
+            "userId": "user1",
+            "receiptId": "receipt1",
+        }
+        with patch("preflight.s3_client", self._make_s3()):
+            result = preflight_handler(event, None)
+
+        self.assertEqual(len(result["normalizedInputKeys"]), 2)
+        # normalizedInputKey must equal the first entry (backward compat).
+        self.assertEqual(result["normalizedInputKey"], result["normalizedInputKeys"][0])
+        # Each normalized key should contain an index suffix.
+        self.assertIn("receipt-0", result["normalizedInputKeys"][0])
+        self.assertIn("receipt-1", result["normalizedInputKeys"][1])
+
+    def test_keys_array_preserves_original_fields(self):
+        event = {
+            "bucket": "test-bucket",
+            "key": "uploads/user1/receipt1/img-0.jpg",
+            "keys": ["uploads/user1/receipt1/img-0.jpg", "uploads/user1/receipt1/img-1.jpg"],
+            "userId": "user1",
+            "receiptId": "receipt1",
+        }
+        with patch("preflight.s3_client", self._make_s3()):
+            result = preflight_handler(event, None)
+
+        self.assertEqual(result["userId"], "user1")
+        self.assertEqual(result["receiptId"], "receipt1")
+        self.assertIn("preflightAt", result)
+
+
+class TestExtractTextractMultiImage(unittest.TestCase):
+    """extract_textract handler merges ExpenseDocuments from multiple images."""
+
+    def _make_mocks(self, doc_lists):
+        """
+        doc_lists: list of lists, one per image call.
+        Returns (mock_s3, mock_textract).
+        """
+        mock_s3 = MagicMock()
+        mock_textract = MagicMock()
+
+        side_effects = []
+        for docs in doc_lists:
+            side_effects.append({"ExpenseDocuments": docs})
+        mock_textract.analyze_expense.side_effect = side_effects
+
+        return mock_s3, mock_textract
+
+    def test_single_normalized_key_path(self):
+        """Falls back to normalizedInputKey when normalizedInputKeys is absent."""
+        event = {
+            "bucket": "test-bucket",
+            "key": "uploads/u/r/img.jpg",
+            "normalizedInputKey": "normalized-inputs/u/r/receipt-0.jpg",
+            "userId": "u",
+            "receiptId": "r",
+        }
+        docs = [{"SummaryFields": [], "LineItemGroups": []}]
+        mock_s3, mock_textract = self._make_mocks([docs])
+
+        with patch("extract_textract.s3_client", mock_s3), \
+             patch("extract_textract.textract_client", mock_textract):
+            result = textract_handler(event, None)
+
+        mock_textract.analyze_expense.assert_called_once()
+        self.assertEqual(result["textractKey"], "raw-extractions/u/r/textract.json")
+
+    def test_multi_normalized_keys_merged(self):
+        """All ExpenseDocuments from multiple images are merged into one JSON."""
+        event = {
+            "bucket": "test-bucket",
+            "key": "uploads/u/r/img-0.jpg",
+            "normalizedInputKeys": [
+                "normalized-inputs/u/r/receipt-0.jpg",
+                "normalized-inputs/u/r/receipt-1.jpg",
+            ],
+            "userId": "u",
+            "receiptId": "r",
+        }
+        docs_0 = [{"SummaryFields": [{"Type": {"Text": "VENDOR_NAME"}}], "LineItemGroups": []}]
+        docs_1 = [{"SummaryFields": [{"Type": {"Text": "TOTAL"}}], "LineItemGroups": []}]
+        mock_s3, mock_textract = self._make_mocks([docs_0, docs_1])
+
+        captured = {}
+
+        def capture_put(**kwargs):
+            import json as _json
+            captured["body"] = _json.loads(kwargs["Body"])
+            return {}
+
+        mock_s3.put_object.side_effect = lambda **kw: captured.update(
+            {"body": __import__("json").loads(kw["Body"])}
+        ) or {}
+
+        with patch("extract_textract.s3_client", mock_s3), \
+             patch("extract_textract.textract_client", mock_textract):
+            result = textract_handler(event, None)
+
+        self.assertEqual(mock_textract.analyze_expense.call_count, 2)
+        # The merged JSON written to S3 should contain docs from both images.
+        put_call_args = mock_s3.put_object.call_args
+        import json as _json
+        merged = _json.loads(put_call_args.kwargs["Body"])
+        self.assertEqual(len(merged["ExpenseDocuments"]), 2)
+
+    def test_multi_keys_returns_single_textract_key(self):
+        """Only one textractKey is returned regardless of image count."""
+        event = {
+            "bucket": "test-bucket",
+            "key": "uploads/u/r/img-0.jpg",
+            "normalizedInputKeys": [
+                "normalized-inputs/u/r/receipt-0.jpg",
+                "normalized-inputs/u/r/receipt-1.jpg",
+                "normalized-inputs/u/r/receipt-2.jpg",
+            ],
+            "userId": "u",
+            "receiptId": "r",
+        }
+        mock_s3, mock_textract = self._make_mocks([[], [], []])
+
+        with patch("extract_textract.s3_client", mock_s3), \
+             patch("extract_textract.textract_client", mock_textract):
+            result = textract_handler(event, None)
+
+        self.assertEqual(mock_textract.analyze_expense.call_count, 3)
+        self.assertEqual(result["textractKey"], "raw-extractions/u/r/textract.json")
+        self.assertEqual(result["extractionProvider"], "TEXTRACT_ANALYZE_EXPENSE")

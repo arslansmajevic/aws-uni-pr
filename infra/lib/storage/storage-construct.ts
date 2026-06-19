@@ -21,6 +21,7 @@ export class StorageConstruct extends Construct {
   public readonly bucket: Bucket;
   public readonly receiptsTable: Table;
   public readonly uploadImageLambda: Function;
+  public readonly uploadMultiImageLambda: Function;
   public readonly getReceiptsLambda: Function;
   public readonly getReceiptLambda: Function;
   public readonly deleteReceiptLambda: Function;
@@ -91,6 +92,24 @@ export class StorageConstruct extends Construct {
     });
 
     this.bucket.grantPut(this.uploadImageLambda);
+
+    // Multi-image upload: provisioned here with a PLACEHOLDER for
+    // STATE_MACHINE_ARN (replaced via addEnvironment after SFN creation).
+    this.uploadMultiImageLambda = new Function(this, "UploadMultiImageLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "uploadMultiImage.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+      timeout: Duration.seconds(60),
+      memorySize: 512,
+      environment: {
+        BUCKET_NAME: this.bucket.bucketName,
+        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+        STATE_MACHINE_ARN: "PLACEHOLDER",
+      },
+    });
+
+    this.bucket.grantPut(this.uploadMultiImageLambda);
+    this.receiptsTable.grantWriteData(this.uploadMultiImageLambda);
 
     // -------------------------------------------------------------------------
     // Receipt Processing Pipeline (Step Functions — Textract-first architecture)
@@ -443,6 +462,15 @@ export class StorageConstruct extends Construct {
 
     // Inject the real state machine ARN (avoids circular reference).
     triggerLambda.addEnvironment(
+      "STATE_MACHINE_ARN",
+      stateMachine.stateMachineArn
+    );
+
+    // Grant multi-image upload Lambda permission to start executions.
+    stateMachine.grantStartExecution(this.uploadMultiImageLambda);
+
+    // Inject the real state machine ARN into the multi-image upload Lambda.
+    this.uploadMultiImageLambda.addEnvironment(
       "STATE_MACHINE_ARN",
       stateMachine.stateMachineArn
     );

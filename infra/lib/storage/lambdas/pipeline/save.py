@@ -79,6 +79,7 @@ def handler(event, context):
     fields = {
         "processingStatus": processing_status,
         "s3ObjectKey": event["key"],
+        "imageKeys": event.get("keys") or [event["key"]],
         "textractKey": event.get("textractKey"),
         "normalizedDataKey": normalized_key,
         "layoutKey": event.get("layoutKey"),

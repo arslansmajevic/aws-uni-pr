@@ -22,60 +22,79 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _analyze_expense(bucket: str, key: str) -> list:
+    """
+    Call Textract AnalyzeExpense on a single S3 object and return the
+    ExpenseDocuments list (ResponseMetadata stripped).
+    """
+    print(f"[ExtractTextract] AnalyzeExpense on s3://{bucket}/{key}")
+    response = textract_client.analyze_expense(
+        Document={"S3Object": {"Bucket": bucket, "Name": key}}
+    )
+    response.pop("ResponseMetadata", None)
+    return response.get("ExpenseDocuments", [])
+
+
 def handler(event, context):
     """
-    Input event:
+    Input event (single image):
     {
       "bucket":             "...",
       "key":                "uploads/<userId>/<receiptId>/<filename>",
-      "normalizedInputKey": "normalized-inputs/<userId>/<receiptId>/receipt.<ext>",
+      "normalizedInputKey": "normalized-inputs/<userId>/<receiptId>/receipt-0.jpg",
       "userId":             "...",
       "receiptId":          "..."
     }
 
-    Output event (adds):
+    Input event (multi-image):
     {
-      "textractKey":          "raw-extractions/<userId>/<receiptId>/textract.json",
-      "extractedAt":          "<ISO timestamp>",
-      "extractionProvider":   "TEXTRACT_ANALYZE_EXPENSE"
+      "bucket":              "...",
+      "key":                 "uploads/.../image-0.jpg",
+      "normalizedInputKeys": ["normalized-inputs/.../receipt-0.jpg",
+                               "normalized-inputs/.../receipt-1.jpg"],
+      "userId":              "...",
+      "receiptId":           "..."
     }
 
-    The full Textract JSON is stored in S3 — NOT returned through Step Functions.
+    Output event adds:
+    {
+      "textractKey":        "raw-extractions/<userId>/<receiptId>/textract.json",
+      "extractedAt":        "<ISO timestamp>",
+      "extractionProvider": "TEXTRACT_ANALYZE_EXPENSE"
+    }
+
+    When multiple images are supplied all their ExpenseDocuments are merged into
+    a single JSON so the downstream normalize stage works unchanged.
     """
     bucket = event["bucket"]
     user_id = event["userId"]
     receipt_id = event["receiptId"]
 
-    # Prefer the normalizedInputKey (validated copy); fall back to the original.
-    source_key = event.get("normalizedInputKey") or event["key"]
+    # Multi-image path takes precedence; fall back to single normalizedInputKey.
+    normalized_keys = event.get("normalizedInputKeys") or [
+        event.get("normalizedInputKey") or event["key"]
+    ]
 
-    print(f"[ExtractTextract] Running AnalyzeExpense on s3://{bucket}/{source_key}")
+    all_expense_docs = []
+    for nk in normalized_keys:
+        docs = _analyze_expense(bucket, nk)
+        all_expense_docs.extend(docs)
 
-    response = textract_client.analyze_expense(
-        Document={
-            "S3Object": {
-                "Bucket": bucket,
-                "Name": source_key,
-            }
-        }
-    )
-
-    # Drop the ResponseMetadata before saving — it adds noise and varies per call.
-    response.pop("ResponseMetadata", None)
+    merged = {"ExpenseDocuments": all_expense_docs}
 
     textract_key = f"raw-extractions/{user_id}/{receipt_id}/textract.json"
 
     s3_client.put_object(
         Bucket=BUCKET_NAME,
         Key=textract_key,
-        Body=json.dumps(response, default=str),
+        Body=json.dumps(merged, default=str),
         ContentType="application/json",
     )
 
-    doc_count = len(response.get("ExpenseDocuments", []))
     print(
         f"[ExtractTextract] Extraction complete. "
-        f"documents={doc_count}, saved to {textract_key}"
+        f"images={len(normalized_keys)}, documents={len(all_expense_docs)}, "
+        f"saved to {textract_key}"
     )
 
     return {

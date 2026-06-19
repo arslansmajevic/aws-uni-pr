@@ -63,29 +63,13 @@ def _detect_format(header: bytes) -> str:
     return "unknown"
 
 
-def handler(event, context):
+def _validate_and_copy(bucket: str, key: str, normalized_key: str) -> tuple[str, str, int]:
     """
-    Input event:
-    {
-      "bucket": "...",
-      "key":    "uploads/<userId>/<receiptId>/<filename>",
-      "userId": "...",
-      "receiptId": "..."
-    }
+    Validate a single image key and copy it to normalized-inputs/.
 
-    Output event (same fields plus):
-    {
-      "normalizedInputKey": "normalized-inputs/<userId>/<receiptId>/receipt.<ext>"
-    }
+    Returns (normalized_key, detected_format, file_size_bytes).
+    Raises ValueError for empty / oversized / unsupported files.
     """
-    bucket = event["bucket"]
-    key = event["key"]
-    user_id = event["userId"]
-    receipt_id = event["receiptId"]
-
-    print(f"[Preflight] Validating upload: key={key}")
-
-    # --- Size check (via HeadObject to avoid downloading large files early) ---
     head = s3_client.head_object(Bucket=bucket, Key=key)
     file_size = head.get("ContentLength", 0)
 
@@ -98,10 +82,7 @@ def handler(event, context):
             f"{MAX_FILE_SIZE_BYTES // (1024*1024)} MB limit: {key}"
         )
 
-    # --- Download just the first 16 bytes for format detection ---
-    header_resp = s3_client.get_object(
-        Bucket=bucket, Key=key, Range="bytes=0-15"
-    )
+    header_resp = s3_client.get_object(Bucket=bucket, Key=key, Range="bytes=0-15")
     header_bytes = header_resp["Body"].read()
 
     fmt = _detect_format(header_bytes)
@@ -119,34 +100,68 @@ def handler(event, context):
             f"Supported formats: JPEG, PNG, TIFF, PDF."
         )
 
-    # Map format to file extension for the normalized copy.
-    ext_map = {
-        "jpeg": "jpg",
-        "png": "png",
-        "tiff_le": "tiff",
-        "tiff_be": "tiff",
-        "pdf": "pdf",
-    }
+    ext_map = {"jpeg": "jpg", "png": "png", "tiff_le": "tiff", "tiff_be": "tiff", "pdf": "pdf"}
     ext = ext_map[fmt]
 
-    # --- Copy (not move) to normalized-inputs/ for downstream use ---
-    normalized_key = f"normalized-inputs/{user_id}/{receipt_id}/receipt.{ext}"
+    # Derive the destination key: replace the suffix with the canonical extension.
+    dest_key = f"{normalized_key}.{ext}"
 
     s3_client.copy_object(
         Bucket=bucket,
         CopySource={"Bucket": bucket, "Key": key},
-        Key=normalized_key,
+        Key=dest_key,
         MetadataDirective="COPY",
     )
 
-    print(
-        f"[Preflight] Validated and copied to {normalized_key} "
-        f"(format={fmt}, size={file_size} bytes)"
-    )
+    print(f"[Preflight] Validated and copied {key} → {dest_key} (format={fmt}, size={file_size})")
+    return dest_key, fmt, file_size
+
+
+def handler(event, context):
+    """
+    Input event (single image):
+    {
+      "bucket": "...",
+      "key":    "uploads/<userId>/<receiptId>/<filename>",
+      "userId": "...",
+      "receiptId": "..."
+    }
+
+    Input event (multi-image — keys array):
+    {
+      "bucket": "...",
+      "key":    "uploads/<userId>/<receiptId>/image-0.jpg",   // primary
+      "keys":   ["uploads/.../image-0.jpg", "uploads/.../image-1.jpg"],
+      "userId": "...",
+      "receiptId": "..."
+    }
+
+    Output event adds:
+      "normalizedInputKey":  <first normalized key>    (backward compat)
+      "normalizedInputKeys": [<key1>, <key2>, ...]     (all normalized keys)
+    """
+    bucket = event["bucket"]
+    user_id = event["userId"]
+    receipt_id = event["receiptId"]
+
+    # Support both single-image (key) and multi-image (keys) paths.
+    source_keys = event.get("keys") or [event["key"]]
+
+    print(f"[Preflight] Validating {len(source_keys)} image(s) for receipt {receipt_id}")
+
+    normalized_keys = []
+    for i, key in enumerate(source_keys):
+        # Build destination path with index suffix so names don't collide.
+        dest_prefix = f"normalized-inputs/{user_id}/{receipt_id}/receipt-{i}"
+        dest_key, fmt, file_size = _validate_and_copy(bucket, key, dest_prefix)
+        normalized_keys.append(dest_key)
 
     return {
         **event,
-        "normalizedInputKey": normalized_key,
+        # Keep scalar for backward compat with single-image downstream stages.
+        "normalizedInputKey": normalized_keys[0],
+        # Full list consumed by multi-image-aware stages.
+        "normalizedInputKeys": normalized_keys,
         "detectedFormat": fmt,
         "fileSizeBytes": file_size,
         "preflightAt": now_iso(),
