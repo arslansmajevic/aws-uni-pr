@@ -631,17 +631,6 @@ class TestExtractTextractMultiImage(unittest.TestCase):
         docs_1 = [{"SummaryFields": [{"Type": {"Text": "TOTAL"}}], "LineItemGroups": []}]
         mock_s3, mock_textract = self._make_mocks([docs_0, docs_1])
 
-        captured = {}
-
-        def capture_put(**kwargs):
-            import json as _json
-            captured["body"] = _json.loads(kwargs["Body"])
-            return {}
-
-        mock_s3.put_object.side_effect = lambda **kw: captured.update(
-            {"body": __import__("json").loads(kw["Body"])}
-        ) or {}
-
         with patch("extract_textract.s3_client", mock_s3), \
              patch("extract_textract.textract_client", mock_textract):
             result = textract_handler(event, None)
@@ -649,8 +638,7 @@ class TestExtractTextractMultiImage(unittest.TestCase):
         self.assertEqual(mock_textract.analyze_expense.call_count, 2)
         # The merged JSON written to S3 should contain docs from both images.
         put_call_args = mock_s3.put_object.call_args
-        import json as _json
-        merged = _json.loads(put_call_args.kwargs["Body"])
+        merged = json.loads(put_call_args.kwargs["Body"])
         self.assertEqual(len(merged["ExpenseDocuments"]), 2)
 
     def test_multi_keys_returns_single_textract_key(self):
