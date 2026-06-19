@@ -27,6 +27,13 @@ export function ReceiptUploadPage() {
     if (fileInput) fileInput.value = ''
   }
 
+  function handleRemoveFile(indexToRemove: number) {
+      setSelectedFiles(prev => prev.filter((_, idx) => idx !== indexToRemove))
+
+      const fileInput = document.getElementById('receipt-file') as HTMLInputElement
+      if (fileInput) fileInput.value = ''
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (selectedFiles.length === 0) {
@@ -84,18 +91,28 @@ export function ReceiptUploadPage() {
                     onChange={handleFileChange}
                     disabled={isUploading}
                     multiple 
-                    required
                   />
 
                   {selectedFiles.length > 0 && (
-                    <div className="mt-3 text-start alert alert-info">
-                      <strong>Selected files ({selectedFiles.length}):</strong>
-                      <ul className="mb-0 mt-2 max-vh-25 overflow-auto">
-                        {selectedFiles.map((file, idx) => (
-                          <li key={idx}>{file.name} ({(file.size / 1024).toFixed(1)} KB)</li>
-                        ))}
-                      </ul>
-                    </div>
+                      <div className="mt-3 text-start alert alert-info">
+                          <strong>Selected files ({selectedFiles.length}):</strong>
+                          <ul className="mb-0 mt-2 max-vh-25 overflow-auto list-unstyled">
+                              {selectedFiles.map((file, idx) => (
+                                  <li key={idx} className="d-flex justify-content-between align-items-center py-1">
+                                      <span>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+                                      <button
+                                          type="button"
+                                          className="btn btn-sm btn-outline-danger ms-2"
+                                          onClick={() => handleRemoveFile(idx)}
+                                          disabled={isUploading}
+                                          aria-label={`Remove ${file.name}`}
+                                      >
+                                          ✕
+                                      </button>
+                                  </li>
+                              ))}
+                          </ul>
+                      </div>
                   )}
 
                   {errorMessage && <div className="alert alert-danger mt-3 mb-0 text-start">{errorMessage}</div>}
@@ -106,7 +123,7 @@ export function ReceiptUploadPage() {
                       {isUploading ? 'Uploading everything...' : 'Upload all receipts'}
                     </button>
                     <button type="button" className="btn btn-outline-secondary btn-lg" onClick={handleClear} disabled={isUploading}>
-                      Clear
+                      Clear All
                     </button>
                   </div>
                 </div>
