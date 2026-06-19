@@ -64,11 +64,18 @@ def normalize_receipt_items(receipt):
         if not isinstance(item, dict):
             continue
 
+        # Canonical schema uses lineTotal; older records may have price.
+        price = item.get("lineTotal") or item.get("price") or receipt.get("totalAmount") or "0"
+
         normalized_items.append(
             {
                 "name": item.get("name") or item.get("description") or "Item",
                 "quantity": item.get("quantity") or "1",
-                "price": item.get("price") or receipt.get("totalAmount") or "0",
+                "unitPrice": item.get("unitPrice"),
+                "lineTotal": item.get("lineTotal"),
+                "price": price,  # legacy compatibility field
+                "discount": item.get("discount"),
+                "productCode": item.get("productCode"),
             }
         )
 
@@ -78,6 +85,7 @@ def normalize_receipt_items(receipt):
                 "name": receipt.get("merchantName") or "Receipt total",
                 "quantity": "1",
                 "price": receipt.get("totalAmount"),
+                "lineTotal": receipt.get("totalAmount"),
             }
         )
 

@@ -53,10 +53,22 @@ export class StorageConstruct extends Construct {
       autoDeleteObjects: true,
       lifecycleRules: [
         {
-          id: "DeleteReceiptImagesAfter90Days",
+          id: "ExpireUploads",
           enabled: true,
           expiration: Duration.days(90),
           prefix: "uploads/",
+        },
+        {
+          id: "ExpireNormalizedInputs",
+          enabled: true,
+          expiration: Duration.days(90),
+          prefix: "normalized-inputs/",
+        },
+        {
+          id: "ExpireRawExtractions",
+          enabled: true,
+          expiration: Duration.days(90),
+          prefix: "raw-extractions/",
         },
       ],
     });
@@ -80,42 +92,115 @@ export class StorageConstruct extends Construct {
 
     this.bucket.grantPut(this.uploadImageLambda);
 
-    // --- Receipt Processing Pipeline (Step Functions) ---
+    // -------------------------------------------------------------------------
+    // Receipt Processing Pipeline (Step Functions — Textract-first architecture)
+    // -------------------------------------------------------------------------
 
-    const pipelineLambdasPath = path.join(__dirname, "lambdas", "pipeline");
+    const pipelinePath = path.join(__dirname, "lambdas", "pipeline");
+    const bedrockRegion = "eu-central-1";
+    const account = cdk.Stack.of(this).account;
 
-    const extractOcrLambda = new Function(this, "ExtractOcrLambda", {
+    // --- Lambdas ---
+
+    const triggerLambda = new Function(this, "PipelineTriggerLambda", {
       runtime: Runtime.PYTHON_3_12,
-      handler: "extract_ocr.handler",
-      code: Code.fromAsset(pipelineLambdasPath),
-      timeout: Duration.seconds(120),
+      handler: "trigger.handler",
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(15),
+      environment: {
+        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+        STATE_MACHINE_ARN: "PLACEHOLDER", // replaced after state machine creation
+      },
+    });
+
+    const preflightLambda = new Function(this, "PreflightLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "preflight.handler",
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      environment: {
+        BUCKET_NAME: this.bucket.bucketName,
+      },
+    });
+
+    const analyzeExpenseLambda = new Function(this, "AnalyzeExpenseLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "extract_textract.handler",
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(60),
       memorySize: 512,
       environment: {
         BUCKET_NAME: this.bucket.bucketName,
-        BEDROCK_MODEL_ID: "eu.mistral.pixtral-large-2502-v1:0",
       },
     });
 
     const normalizeLambda = new Function(this, "NormalizeLambda", {
       runtime: Runtime.PYTHON_3_12,
       handler: "normalize.handler",
-      code: Code.fromAsset(pipelineLambdasPath),
+      code: Code.fromAsset(pipelinePath),
       timeout: Duration.seconds(60),
       memorySize: 256,
+      environment: {
+        BUCKET_NAME: this.bucket.bucketName,
+      },
     });
 
     const validateLambda = new Function(this, "ValidateLambda", {
       runtime: Runtime.PYTHON_3_12,
       handler: "validate.handler",
-      code: Code.fromAsset(pipelineLambdasPath),
-      timeout: Duration.seconds(10),
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      environment: {
+        BUCKET_NAME: this.bucket.bucketName,
+      },
+    });
+
+    const analyzeDocumentFallbackLambda = new Function(
+      this,
+      "AnalyzeDocumentFallbackLambda",
+      {
+        runtime: Runtime.PYTHON_3_12,
+        handler: "extract_layout.handler",
+        code: Code.fromAsset(pipelinePath),
+        timeout: Duration.seconds(120),
+        memorySize: 512,
+        environment: {
+          BUCKET_NAME: this.bucket.bucketName,
+        },
+      }
+    );
+
+    const repairItemsLambda = new Function(this, "RepairItemsLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "repair_items.handler",
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(120),
+      memorySize: 512,
+      environment: {
+        BUCKET_NAME: this.bucket.bucketName,
+        REPAIR_MODEL_ID: "eu.amazon.nova-pro-v1:0",
+      },
+    });
+
+    const mergeRepairLambda = new Function(this, "MergeRepairLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "merge_repair.handler",
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      environment: {
+        BUCKET_NAME: this.bucket.bucketName,
+      },
     });
 
     const saveLambda = new Function(this, "SaveLambda", {
       runtime: Runtime.PYTHON_3_12,
       handler: "save.handler",
-      code: Code.fromAsset(pipelineLambdasPath),
-      timeout: Duration.seconds(10),
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
         BUCKET_NAME: this.bucket.bucketName,
@@ -125,29 +210,74 @@ export class StorageConstruct extends Construct {
     const errorHandlerLambda = new Function(this, "ErrorHandlerLambda", {
       runtime: Runtime.PYTHON_3_12,
       handler: "error_handler.handler",
-      code: Code.fromAsset(pipelineLambdasPath),
-      timeout: Duration.seconds(10),
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(15),
       environment: {
         RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
       },
     });
 
-    // Permissions for pipeline Lambdas
-    this.bucket.grantRead(extractOcrLambda);
-    this.bucket.grantPut(extractOcrLambda);
+    // --- S3 permissions ---
+
+    // Trigger: read the uploaded file (for ETag in idempotency).
+    this.bucket.grantRead(triggerLambda);
+
+    // Preflight: read original upload, write to normalized-inputs/.
+    this.bucket.grantRead(preflightLambda);
+    this.bucket.grantPut(preflightLambda);
+
+    // AnalyzeExpense: read normalized input, write raw-extractions/.
+    this.bucket.grantRead(analyzeExpenseLambda);
+    this.bucket.grantPut(analyzeExpenseLambda);
+
+    // Normalize: read raw-extractions/, write normalized.json.
+    this.bucket.grantRead(normalizeLambda);
+    this.bucket.grantPut(normalizeLambda);
+
+    // Validate: read raw-extractions/, write validation.json.
+    this.bucket.grantRead(validateLambda);
+    this.bucket.grantPut(validateLambda);
+
+    // AnalyzeDocumentFallback: read normalized input, write layout.json.
+    this.bucket.grantRead(analyzeDocumentFallbackLambda);
+    this.bucket.grantPut(analyzeDocumentFallbackLambda);
+
+    // RepairItems: read image + textract + layout + normalized, write repair.json.
+    this.bucket.grantRead(repairItemsLambda);
+    this.bucket.grantPut(repairItemsLambda);
+
+    // MergeRepair: read + write normalized.json and repair audit.
+    this.bucket.grantRead(mergeRepairLambda);
+    this.bucket.grantPut(mergeRepairLambda);
+
+    // Save: read normalized + validation, write any remaining artifacts.
+    this.bucket.grantRead(saveLambda);
     this.bucket.grantPut(saveLambda);
+
+    // --- DynamoDB permissions ---
+    this.receiptsTable.grantWriteData(triggerLambda);
     this.receiptsTable.grantWriteData(saveLambda);
     this.receiptsTable.grantWriteData(errorHandlerLambda);
 
-    const bedrockRegion = "eu-central-1";
-    const account = cdk.Stack.of(this).account;
+    // --- Textract permissions ---
+    const textractAnalyzeExpensePolicy = new PolicyStatement({
+      actions: ["textract:AnalyzeExpense"],
+      resources: ["*"],
+    });
+    const textractAnalyzeDocumentPolicy = new PolicyStatement({
+      actions: ["textract:AnalyzeDocument"],
+      resources: ["*"],
+    });
+    analyzeExpenseLambda.addToRolePolicy(textractAnalyzeExpensePolicy);
+    analyzeDocumentFallbackLambda.addToRolePolicy(textractAnalyzeDocumentPolicy);
 
-    extractOcrLambda.addToRolePolicy(
+    // --- Bedrock permissions (repair Lambda only) ---
+    repairItemsLambda.addToRolePolicy(
       new PolicyStatement({
-        actions: ["bedrock:InvokeModel*"],
+        actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
         resources: [
-          `arn:aws:bedrock:${bedrockRegion}:${account}:inference-profile/eu.mistral.pixtral-large-2502-v1:0`,
-          `arn:aws:bedrock:eu-central-1::foundation-model/*`,
+          `arn:aws:bedrock:${bedrockRegion}:${account}:inference-profile/eu.amazon.nova-pro-v1:0`,
+          `arn:aws:bedrock:${bedrockRegion}::foundation-model/*`,
           `arn:aws:bedrock:eu-north-1::foundation-model/*`,
           `arn:aws:bedrock:eu-west-1::foundation-model/*`,
           `arn:aws:bedrock:eu-west-3::foundation-model/*`,
@@ -155,52 +285,11 @@ export class StorageConstruct extends Construct {
       })
     );
 
-    // Step Functions state machine definition
-    const extractTask = new tasks.LambdaInvoke(this, "ExtractOCR", {
-      lambdaFunction: extractOcrLambda,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    extractTask.addRetry({
-      errors: ["States.TaskFailed"],
-      interval: Duration.seconds(5),
-      maxAttempts: 2,
-      backoffRate: 2,
-    });
+    // -------------------------------------------------------------------------
+    // Step Functions: Textract-first pipeline with repair branch
+    // -------------------------------------------------------------------------
 
-    const normalizeTask = new tasks.LambdaInvoke(this, "NormalizeData", {
-      lambdaFunction: normalizeLambda,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    normalizeTask.addRetry({
-      errors: ["States.TaskFailed"],
-      interval: Duration.seconds(3),
-      maxAttempts: 2,
-      backoffRate: 2,
-    });
-
-    const validateTask = new tasks.LambdaInvoke(this, "ValidateData", {
-      lambdaFunction: validateLambda,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-
-    const saveTask = new tasks.LambdaInvoke(this, "SaveReceipt", {
-      lambdaFunction: saveLambda,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-
-    const handleError = new tasks.LambdaInvoke(this, "HandleError", {
-      lambdaFunction: errorHandlerLambda,
-      outputPath: "$.Payload",
-    });
-
-    // Wire error handling: each stage catches errors and routes to handler
-    const errorCatchProps: sfn.CatchProps = {
-      resultPath: "$.error",
-    };
+    const errorCatchProps: sfn.CatchProps = { resultPath: "$.error" };
 
     const addErrorInfo = (stageName: string) =>
       new sfn.Pass(this, `PrepError_${stageName}`, {
@@ -212,51 +301,151 @@ export class StorageConstruct extends Construct {
         },
       });
 
-    const extractErrorPass = addErrorInfo("ExtractOCR");
-    const normalizeErrorPass = addErrorInfo("Normalize");
-    const validateErrorPass = addErrorInfo("Validate");
-    const saveErrorPass = addErrorInfo("Save");
+    const handleErrorTask = new tasks.LambdaInvoke(this, "HandleError", {
+      lambdaFunction: errorHandlerLambda,
+      outputPath: "$.Payload",
+    });
 
-    extractErrorPass.next(handleError);
-    normalizeErrorPass.next(handleError);
-    validateErrorPass.next(handleError);
-    saveErrorPass.next(handleError);
+    // Wire error pass states → handleError.
+    const stageNames = [
+      "Preflight", "AnalyzeExpense", "Normalize",
+      "Validate", "AnalyzeDocumentFallback", "RepairItems",
+      "MergeRepair", "ValidateAfterRepair", "Save",
+    ];
+    const errorPasses: Record<string, sfn.Pass> = {};
+    stageNames.forEach((name) => {
+      const pass = addErrorInfo(name);
+      pass.next(handleErrorTask);
+      errorPasses[name] = pass;
+    });
 
-    extractTask.addCatch(extractErrorPass, errorCatchProps);
-    normalizeTask.addCatch(normalizeErrorPass, errorCatchProps);
-    validateTask.addCatch(validateErrorPass, errorCatchProps);
-    saveTask.addCatch(saveErrorPass, errorCatchProps);
+    // --- Primary pipeline tasks ---
 
-    const definition = extractTask
+    const preflightTask = new tasks.LambdaInvoke(this, "Preflight", {
+      lambdaFunction: preflightLambda,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: false,
+    });
+    preflightTask.addRetry({ errors: ["States.TaskFailed"], interval: Duration.seconds(2), maxAttempts: 1, backoffRate: 1 });
+    preflightTask.addCatch(errorPasses["Preflight"], errorCatchProps);
+
+    const analyzeExpenseTask = new tasks.LambdaInvoke(this, "AnalyzeExpense", {
+      lambdaFunction: analyzeExpenseLambda,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    analyzeExpenseTask.addRetry({
+      errors: ["States.TaskFailed"],
+      interval: Duration.seconds(5),
+      maxAttempts: 2,
+      backoffRate: 2,
+    });
+    analyzeExpenseTask.addCatch(errorPasses["AnalyzeExpense"], errorCatchProps);
+
+    const normalizeTask = new tasks.LambdaInvoke(this, "NormalizeData", {
+      lambdaFunction: normalizeLambda,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    normalizeTask.addRetry({ errors: ["States.TaskFailed"], interval: Duration.seconds(3), maxAttempts: 2, backoffRate: 2 });
+    normalizeTask.addCatch(errorPasses["Normalize"], errorCatchProps);
+
+    const validateTask = new tasks.LambdaInvoke(this, "ValidateData", {
+      lambdaFunction: validateLambda,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    validateTask.addCatch(errorPasses["Validate"], errorCatchProps);
+
+    const saveTask = new tasks.LambdaInvoke(this, "SaveReceipt", {
+      lambdaFunction: saveLambda,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    saveTask.addRetry({ errors: ["States.TaskFailed"], interval: Duration.seconds(3), maxAttempts: 2, backoffRate: 2 });
+    saveTask.addCatch(errorPasses["Save"], errorCatchProps);
+
+    // --- Repair branch tasks ---
+
+    const analyzeDocumentFallbackTask = new tasks.LambdaInvoke(
+      this,
+      "AnalyzeDocumentFallback",
+      {
+        lambdaFunction: analyzeDocumentFallbackLambda,
+        outputPath: "$.Payload",
+        retryOnServiceExceptions: true,
+      }
+    );
+    analyzeDocumentFallbackTask.addRetry({ errors: ["States.TaskFailed"], interval: Duration.seconds(5), maxAttempts: 2, backoffRate: 2 });
+    analyzeDocumentFallbackTask.addCatch(errorPasses["AnalyzeDocumentFallback"], errorCatchProps);
+
+    const repairItemsTask = new tasks.LambdaInvoke(this, "RepairItems", {
+      lambdaFunction: repairItemsLambda,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    repairItemsTask.addRetry({ errors: ["States.TaskFailed"], interval: Duration.seconds(5), maxAttempts: 1, backoffRate: 2 });
+    repairItemsTask.addCatch(errorPasses["RepairItems"], errorCatchProps);
+
+    const mergeRepairTask = new tasks.LambdaInvoke(this, "MergeRepair", {
+      lambdaFunction: mergeRepairLambda,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    mergeRepairTask.addRetry({ errors: ["States.TaskFailed"], interval: Duration.seconds(3), maxAttempts: 2, backoffRate: 2 });
+    mergeRepairTask.addCatch(errorPasses["MergeRepair"], errorCatchProps);
+
+    const validateAfterRepairTask = new tasks.LambdaInvoke(
+      this,
+      "ValidateAfterRepair",
+      {
+        lambdaFunction: validateLambda,
+        outputPath: "$.Payload",
+        retryOnServiceExceptions: true,
+      }
+    );
+    validateAfterRepairTask.addCatch(errorPasses["ValidateAfterRepair"], errorCatchProps);
+
+    // --- Repair branch chain ---
+    const repairBranch = analyzeDocumentFallbackTask
+      .next(repairItemsTask)
+      .next(mergeRepairTask)
+      .next(validateAfterRepairTask)
+      .next(saveTask);
+
+    // --- Choice: repair required? ---
+    const repairChoice = new sfn.Choice(this, "RepairRequired?")
+      .when(
+        sfn.Condition.booleanEquals("$.repairRequired", true),
+        repairBranch
+      )
+      .otherwise(saveTask);
+
+    // --- Full pipeline definition ---
+    const definition = preflightTask
+      .next(analyzeExpenseTask)
       .next(normalizeTask)
       .next(validateTask)
-      .next(saveTask);
+      .next(repairChoice);
 
     const stateMachine = new sfn.StateMachine(
       this,
       "ReceiptProcessingPipeline",
       {
         definitionBody: sfn.DefinitionBody.fromChainable(definition),
-        timeout: Duration.minutes(5),
+        timeout: Duration.minutes(10),
         tracingEnabled: true,
       }
     );
 
-    // Trigger Lambda: S3 event -> starts Step Function
-    const triggerLambda = new Function(this, "PipelineTriggerLambda", {
-      runtime: Runtime.PYTHON_3_12,
-      handler: "trigger.handler",
-      code: Code.fromAsset(pipelineLambdasPath),
-      timeout: Duration.seconds(10),
-      environment: {
-        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
-        STATE_MACHINE_ARN: stateMachine.stateMachineArn,
-      },
-    });
-
+    // Grant trigger Lambda permission to start executions.
     stateMachine.grantStartExecution(triggerLambda);
-    this.receiptsTable.grantWriteData(triggerLambda);
-    this.bucket.grantRead(triggerLambda);
+
+    // Inject the real state machine ARN (avoids circular reference).
+    triggerLambda.addEnvironment(
+      "STATE_MACHINE_ARN",
+      stateMachine.stateMachineArn
+    );
 
     this.bucket.addEventNotification(
       EventType.OBJECT_CREATED,
@@ -264,7 +453,9 @@ export class StorageConstruct extends Construct {
       { prefix: "uploads/" }
     );
 
-    // --- End Pipeline ---
+    // -------------------------------------------------------------------------
+    // Query / read-side Lambdas (unchanged)
+    // -------------------------------------------------------------------------
 
     this.getReceiptsLambda = new Function(this, "GetReceiptsLambda", {
       runtime: Runtime.PYTHON_3_12,
@@ -275,7 +466,6 @@ export class StorageConstruct extends Construct {
         BUCKET_NAME: this.bucket.bucketName,
       },
     });
-
     this.receiptsTable.grantReadData(this.getReceiptsLambda);
     this.bucket.grantRead(this.getReceiptsLambda);
 
@@ -319,7 +509,6 @@ export class StorageConstruct extends Construct {
         },
       }
     );
-
     this.receiptsTable.grantReadData(this.getReceiptDetailedSummaryLambda);
     this.bucket.grantRead(this.getReceiptDetailedSummaryLambda, "uploads/*");
   }
