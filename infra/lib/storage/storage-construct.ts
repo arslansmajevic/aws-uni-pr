@@ -22,6 +22,7 @@ export class StorageConstruct extends Construct {
   public readonly receiptsTable: Table;
   public readonly uploadImageLambda: Function;
   public readonly uploadMultiImageLambda: Function;
+  public readonly addReceiptImageLambda: Function;
   public readonly getReceiptsLambda: Function;
   public readonly getReceiptLambda: Function;
   public readonly deleteReceiptLambda: Function;
@@ -110,6 +111,24 @@ export class StorageConstruct extends Construct {
 
     this.bucket.grantPut(this.uploadMultiImageLambda);
     this.receiptsTable.grantWriteData(this.uploadMultiImageLambda);
+
+    // Add-image-to-existing-receipt: provisioned here with a PLACEHOLDER for
+    // STATE_MACHINE_ARN (replaced via addEnvironment after SFN creation).
+    this.addReceiptImageLambda = new Function(this, "AddReceiptImageLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "addReceiptImage.handler",
+      code: Code.fromAsset(path.join(__dirname, "lambdas")),
+      timeout: Duration.seconds(60),
+      memorySize: 512,
+      environment: {
+        BUCKET_NAME: this.bucket.bucketName,
+        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+        STATE_MACHINE_ARN: "PLACEHOLDER",
+      },
+    });
+
+    this.bucket.grantPut(this.addReceiptImageLambda);
+    this.receiptsTable.grantReadWriteData(this.addReceiptImageLambda);
 
     // -------------------------------------------------------------------------
     // Receipt Processing Pipeline (Step Functions — Textract-first architecture)
@@ -471,6 +490,13 @@ export class StorageConstruct extends Construct {
 
     // Inject the real state machine ARN into the multi-image upload Lambda.
     this.uploadMultiImageLambda.addEnvironment(
+      "STATE_MACHINE_ARN",
+      stateMachine.stateMachineArn
+    );
+
+    // Grant add-image Lambda permission to start executions and inject the ARN.
+    stateMachine.grantStartExecution(this.addReceiptImageLambda);
+    this.addReceiptImageLambda.addEnvironment(
       "STATE_MACHINE_ARN",
       stateMachine.stateMachineArn
     );

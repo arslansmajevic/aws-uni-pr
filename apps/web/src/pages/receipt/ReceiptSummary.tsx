@@ -1,7 +1,7 @@
 // apps/web/src/pages/receipt/ReceiptSummary.tsx
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { deleteReceipt, getReceiptSummary, type ReceiptSummaryResponse } from '../../services/receipts'
+import { addReceiptImage, deleteReceipt, getReceiptSummary, type ReceiptSummaryResponse } from '../../services/receipts'
 
 type ReceiptItem = {
 	name?: string | null
@@ -48,6 +48,10 @@ export function ReceiptSummary() {
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
+	const [currentImageIndex, setCurrentImageIndex] = useState(0)
+	const [isAddingImage, setIsAddingImage] = useState(false)
+	const [refreshKey, setRefreshKey] = useState(0)
+	const fileInputRef = useRef<HTMLInputElement | null>(null)
 
 	useEffect(() => {
 		let isMounted = true
@@ -83,7 +87,7 @@ export function ReceiptSummary() {
 		return () => {
 			isMounted = false
 		}
-	}, [receiptId])
+	}, [receiptId, refreshKey])
 
 	const receiptItems: ReceiptItem[] = receipt?.receiptItems ?? []
 	const currency = receipt?.currency || 'USD'
@@ -96,7 +100,50 @@ export function ReceiptSummary() {
 		() => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(fallbackImageSvg)}`,
 		[]
 	)
-	const receiptImage = receipt?.imageUrl || fallbackReceiptImage
+	const receiptImages = (() => {
+		const urls = (receipt?.imageUrls ?? []).filter((url): url is string => Boolean(url))
+		if (urls.length > 0) {
+			return urls
+		}
+		return receipt?.imageUrl ? [receipt.imageUrl] : []
+	})()
+
+	const hasMultipleImages = receiptImages.length > 1
+	const safeImageIndex = receiptImages.length > 0
+		? Math.min(currentImageIndex, receiptImages.length - 1)
+		: 0
+	const currentImage = receiptImages[safeImageIndex] || fallbackReceiptImage
+
+	function showPreviousImage() {
+		setCurrentImageIndex((index) => (index - 1 + receiptImages.length) % receiptImages.length)
+	}
+
+	function showNextImage() {
+		setCurrentImageIndex((index) => (index + 1) % receiptImages.length)
+	}
+
+	function handleAddImageClick() {
+		fileInputRef.current?.click()
+	}
+
+	async function handleAddImageChange(event: ChangeEvent<HTMLInputElement>) {
+		const file = event.target.files?.[0]
+		event.target.value = ''
+		if (!file || !receiptId) {
+			return
+		}
+
+		try {
+			setIsAddingImage(true)
+			await addReceiptImage(receiptId, file)
+			setCurrentImageIndex(0)
+			setRefreshKey((key) => key + 1)
+		} catch (error) {
+			window.alert(error instanceof Error ? error.message : 'Failed to add image to receipt.')
+		} finally {
+			setIsAddingImage(false)
+		}
+	}
 
 	async function handleDeleteReceipt() {
 		if (!receiptId || !window.confirm('Delete this receipt?')) {
@@ -115,9 +162,9 @@ export function ReceiptSummary() {
 	}
 
 	async function handleDownload() {
-		if (!receiptImage) return
+		if (!currentImage) return
 		try {
-			const response = await fetch(receiptImage, {
+			const response = await fetch(currentImage, {
 				mode: 'cors',
 				cache: 'no-store',
 			})
@@ -128,7 +175,8 @@ export function ReceiptSummary() {
 			const blobUrl = window.URL.createObjectURL(blob)
 			const link = document.createElement('a')
 			link.href = blobUrl
-			link.download = `receipt-${receiptId || 'image'}.jpg`
+			const suffix = receiptImages.length > 1 ? `-${safeImageIndex + 1}` : ''
+			link.download = `receipt-${receiptId || 'image'}${suffix}.jpg`
 			document.body.appendChild(link)
 			link.click()
 			document.body.removeChild(link)
@@ -168,24 +216,91 @@ export function ReceiptSummary() {
 
 				<div className="row g-4">
 					<div className="col-12 col-lg-5">
-						<div className="p-4 bg-white border rounded-4 shadow-sm h-100 d-grid gap-3">
-							<button
-								type="button"
-								className="btn p-0 border-0 bg-transparent text-start"
-								onClick={() => setIsExpanded(true)}
-								aria-label="Expand receipt image"
-							>
-								<img
-									src={receiptImage}
-									alt={`Receipt preview ${receiptId || 'unknown'}`}
-									className="img-fluid rounded-4 border shadow-sm w-100"
-									style={{ cursor: 'zoom-in' }}
-								/>
-							</button>
+						<div className="p-4 bg-white border rounded-4 shadow-sm h-100 d-grid gap-3" style={{ gridTemplateRows: 'auto auto auto 1fr' }}>
+							<div className="position-relative">
+								<button
+									type="button"
+									className="btn p-0 border-0 w-100 rounded-4 overflow-hidden bg-light d-flex align-items-center justify-content-center"
+									onClick={() => setIsExpanded(true)}
+									aria-label="Expand receipt image"
+									style={{ height: '420px', cursor: 'zoom-in' }}
+								>
+									<img
+										src={currentImage}
+										alt={`Receipt preview ${safeImageIndex + 1} of ${receiptImages.length || 1}`}
+										className="w-100 h-100"
+										style={{ objectFit: 'contain' }}
+									/>
+								</button>
+
+								{hasMultipleImages ? (
+									<>
+										<button
+											type="button"
+											className="btn btn-light border rounded-circle position-absolute top-50 start-0 translate-middle-y ms-2 shadow-sm"
+											onClick={showPreviousImage}
+											aria-label="Previous image"
+											style={{ width: '40px', height: '40px' }}
+										>
+											‹
+										</button>
+										<button
+											type="button"
+											className="btn btn-light border rounded-circle position-absolute top-50 end-0 translate-middle-y me-2 shadow-sm"
+											onClick={showNextImage}
+											aria-label="Next image"
+											style={{ width: '40px', height: '40px' }}
+										>
+											›
+										</button>
+										<span className="badge text-bg-dark position-absolute bottom-0 end-0 m-2">
+											{safeImageIndex + 1} / {receiptImages.length}
+										</span>
+									</>
+								) : null}
+							</div>
+
+							{hasMultipleImages ? (
+								<div className="d-flex flex-wrap gap-2 justify-content-center">
+									{receiptImages.map((image, index) => (
+										<button
+											key={`${image}-${index}`}
+											type="button"
+											className={`btn p-0 border rounded-3 overflow-hidden ${index === safeImageIndex ? 'border-primary border-2' : ''}`}
+											onClick={() => setCurrentImageIndex(index)}
+											aria-label={`View image ${index + 1}`}
+											style={{ width: '56px', height: '56px' }}
+										>
+											<img
+												src={image}
+												alt={`Thumbnail ${index + 1}`}
+												className="w-100 h-100"
+												style={{ objectFit: 'cover' }}
+											/>
+										</button>
+									))}
+								</div>
+							) : null}
+
+							<input
+								ref={fileInputRef}
+								type="file"
+								accept="image/png,image/jpeg,image/tiff,application/pdf"
+								className="d-none"
+								onChange={handleAddImageChange}
+							/>
 
 							<div className="d-flex flex-wrap gap-2">
 								<button type="button" className="btn btn-primary" onClick={handleDownload}>
 									Download picture
+								</button>
+								<button
+									type="button"
+									className="btn btn-outline-primary"
+									onClick={handleAddImageClick}
+									disabled={isAddingImage}
+								>
+									{isAddingImage ? 'Adding image...' : 'Add another image'}
 								</button>
 								<button
 									type="button"
@@ -197,8 +312,10 @@ export function ReceiptSummary() {
 								</button>
 							</div>
 
-							<div className="p-3 bg-light border rounded-3 small text-secondary">
-								Tap the image to expand it. The page is now backed by /receipts/{receiptId || 'someId'}.
+							<div className="p-3 bg-light border rounded-3 small text-secondary align-self-start">
+								{hasMultipleImages
+									? 'Use the arrows or thumbnails to browse every image saved for this receipt.'
+									: 'Add another image to capture more of this receipt and reprocess it together.'}
 							</div>
 						</div>
 					</div>
@@ -264,15 +381,42 @@ export function ReceiptSummary() {
 				>
 					<div className="bg-white rounded-4 shadow-lg p-3 m-3" onClick={(event) => event.stopPropagation()}>
 						<div className="d-flex justify-content-between align-items-center mb-2">
-							<strong>Expanded receipt preview</strong>
+							<strong>
+								Expanded receipt preview
+								{hasMultipleImages ? ` (${safeImageIndex + 1} / ${receiptImages.length})` : ''}
+							</strong>
 							<button type="button" className="btn-close" aria-label="Close" onClick={() => setIsExpanded(false)} />
 						</div>
-						<img
-							src={receiptImage}
-							alt={`Expanded receipt preview ${receiptId || 'unknown'}`}
-							className="img-fluid rounded-4 border"
-							style={{ maxHeight: '80vh' }}
-						/>
+						<div className="d-flex align-items-center gap-2">
+							{hasMultipleImages ? (
+								<button
+									type="button"
+									className="btn btn-light border rounded-circle flex-shrink-0"
+									onClick={showPreviousImage}
+									aria-label="Previous image"
+									style={{ width: '44px', height: '44px' }}
+								>
+									‹
+								</button>
+							) : null}
+							<img
+								src={currentImage}
+								alt={`Expanded receipt preview ${safeImageIndex + 1}`}
+								className="img-fluid rounded-4 border"
+								style={{ maxHeight: '80vh' }}
+							/>
+							{hasMultipleImages ? (
+								<button
+									type="button"
+									className="btn btn-light border rounded-circle flex-shrink-0"
+									onClick={showNextImage}
+									aria-label="Next image"
+									style={{ width: '44px', height: '44px' }}
+								>
+									›
+								</button>
+							) : null}
+						</div>
 					</div>
 				</div>
 			) : null}
