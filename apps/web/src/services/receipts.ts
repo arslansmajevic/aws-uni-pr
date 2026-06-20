@@ -173,7 +173,8 @@ export async function deleteReceipt(receiptId: string): Promise<void> {
 	}
 }
 
-export async function getReceiptSummary(receiptId: string): Promise<ReceiptSummaryResponse> {	const config = await loadConfig()
+export async function getReceiptSummary(receiptId: string): Promise<ReceiptSummaryResponse> {
+	const config = await loadConfig()
 	const token = await getValidIdToken()
 
 	if (!token) throw new Error('Not authenticated')
