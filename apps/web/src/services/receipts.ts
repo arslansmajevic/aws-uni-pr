@@ -19,6 +19,12 @@ export type UploadResponse = {
 	key: string
 }
 
+export type MultiUploadResponse = {
+	message: string
+	receiptId: string
+	keys: string[]
+}
+
 export type ReceiptSummaryItem = {
 	name?: string | null
 	quantity?: string | number | null
@@ -80,6 +86,51 @@ export async function uploadReceipt(file: File): Promise<UploadResponse> {
 	}
 
 	return (await response.json()) as UploadResponse
+}
+
+async function fileToBase64(file: File): Promise<string> {
+	return new Promise<string>((resolve, reject) => {
+		const reader = new FileReader()
+		reader.readAsDataURL(file)
+		reader.onload = () => {
+			const result = reader.result as string
+			resolve(result.split(',')[1])
+		}
+		reader.onerror = (error) => reject(error)
+	})
+}
+
+export async function uploadReceiptMultiImage(files: File[]): Promise<MultiUploadResponse> {
+	const config = await loadConfig()
+	const token = await getValidIdToken()
+
+	if (!token) {
+		throw new Error('User is not authenticated. Please log in again.')
+	}
+
+	const images = await Promise.all(
+		files.map(async (file) => ({
+			fileName: file.name,
+			contentType: file.type || 'application/octet-stream',
+			imageBase64: await fileToBase64(file),
+		}))
+	)
+
+	const response = await fetch(`${config.apiUrl.replace(/\/$/, '')}/image/multi`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Authorization': token,
+		},
+		body: JSON.stringify({ images }),
+	})
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({}))
+		throw new Error(errorData.message || `Multi-image upload failed with status ${response.status}`)
+	}
+
+	return (await response.json()) as MultiUploadResponse
 }
 
 export async function getReceipts(): Promise<any[]> {

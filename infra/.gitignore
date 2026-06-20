@@ -6,3 +6,8 @@ node_modules
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+# Python bytecode
+__pycache__/
+*.pyc
+.pytest_cache/

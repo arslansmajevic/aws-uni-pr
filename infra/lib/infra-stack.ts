@@ -30,6 +30,12 @@ export class InfraStack extends cdk.Stack {
           jwtRequired: jwtRequiredFlag,
         },
         {
+          function: storageConstruct.uploadMultiImageLambda,
+          method: "POST",
+          resourcePath: "image/multi",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
           function: authenticationConstruct.registerLambda,
           method: "POST",
           resourcePath: "register",
