@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getValidUserClaims, logout } from '../../services/authentication'
-import { getPlaidLinkToken, exchangePlaidPublicToken, disconnectBank, getBankStatus } from '../../services/banking'
+import { getPlaidLinkToken, exchangePlaidPublicToken, disconnectBank, getBankStatus, savePlaidToken } from '../../services/banking'
 
 type UserInfo = {
     givenName: string
@@ -19,6 +19,8 @@ export function UserPage() {
     const [isBankConnected, setIsBankConnected] = useState(false)
     const [plaidLoading, setPlaidLoading] = useState(false)
     const [plaidError, setPlaidError] = useState<string | null>(null)
+    const [plaidToken, setPlaidToken] = useState('')
+    const [tokenSaved, setTokenSaved] = useState(false)
 
     useEffect(() => {
         let isMounted = true
@@ -121,8 +123,37 @@ export function UserPage() {
             localStorage.removeItem('isBankConnected')
             localStorage.setItem('bankStatusUpdatedAt', Date.now().toString())
             setIsBankConnected(false)
+            setTokenSaved(false)
         } catch (err) {
             setPlaidError(err instanceof Error ? err.message : 'Failed to disconnect bank account.')
+        } finally {
+            setPlaidLoading(false)
+        }
+    }
+
+    async function handleSaveToken(event: React.FormEvent) {
+        event.preventDefault()
+
+        const trimmed = plaidToken.trim()
+        if (!trimmed) {
+            setPlaidError('Enter a Plaid API token to register.')
+            return
+        }
+
+        try {
+            setPlaidLoading(true)
+            setPlaidError(null)
+            setTokenSaved(false)
+            await savePlaidToken(trimmed)
+
+            // Never keep the token in memory or on screen once it is stored.
+            setPlaidToken('')
+            setTokenSaved(true)
+            localStorage.setItem('isBankConnected', 'true')
+            localStorage.setItem('bankStatusUpdatedAt', Date.now().toString())
+            setIsBankConnected(true)
+        } catch (err) {
+            setPlaidError(err instanceof Error ? err.message : 'Failed to save Plaid token.')
         } finally {
             setPlaidLoading(false)
         }
@@ -173,28 +204,48 @@ export function UserPage() {
                             <div>
                                 {isBankConnected ? (
                                     <div className="p-3 bg-light border border-success rounded-3 mb-3 small">
-                                        <span className="text-success fw-bold">✓ Live Ledger Synced</span>
-                                        <p className="text-secondary mb-0 mt-1">Token infrastructure securely managed inside AWS Secrets Manager.</p>
+                                        <span className="text-success fw-bold">✓ Token registered</span>
+                                        <p className="text-secondary mb-0 mt-1">Your Plaid API token is securely stored inside AWS Secrets Manager and is never displayed here.</p>
                                     </div>
                                 ) : (
                                     <div className="p-3 bg-light border border-info rounded-3 mb-3 small">
-                                        <span className="text-info fw-bold">ℹ Vault Credentials Ready</span>
-                                        <p className="text-secondary mb-0 mt-1">AWS infrastructure is fully primed to accept tokens.</p>
+                                        <span className="text-info fw-bold">ℹ No token registered</span>
+                                        <p className="text-secondary mb-0 mt-1">Register a Plaid API token to enable automatic receipt-to-transaction matching.</p>
                                     </div>
                                 )}
 
+                                <form onSubmit={handleSaveToken} className="mb-3">
+                                    <label htmlFor="plaidToken" className="form-label small fw-semibold mb-1">
+                                        {isBankConnected ? 'Replace Plaid API token' : 'Register Plaid API token'}
+                                    </label>
+                                    <input
+                                        id="plaidToken"
+                                        type="password"
+                                        className="form-control form-control-sm mb-2"
+                                        placeholder="access-sandbox-..."
+                                        value={plaidToken}
+                                        autoComplete="off"
+                                        onChange={(e) => { setPlaidToken(e.target.value); setTokenSaved(false) }}
+                                        disabled={plaidLoading}
+                                    />
+                                    <button type="submit" className="btn btn-primary w-100 btn-sm" disabled={plaidLoading}>
+                                        {plaidLoading ? 'Saving...' : (isBankConnected ? 'Update token' : 'Save token')}
+                                    </button>
+                                    {tokenSaved && <p className="text-success small mb-0 mt-2">Token saved securely.</p>}
+                                </form>
+
                                 {isBankConnected ? (
                                     <button type="button" className="btn btn-outline-danger w-100 btn-sm" onClick={handleDisconnectBank} disabled={plaidLoading}>
-                                        Disconnect Account Feed
+                                        Delete token
                                     </button>
                                 ) : (
                                     <button 
                                         type="button" 
-                                        className="btn btn-primary w-100 mb-2 btn-sm" 
+                                        className="btn btn-outline-secondary w-100 btn-sm" 
                                         onClick={handleConnectBank} 
                                         disabled={plaidLoading}
                                     >
-                                        {plaidLoading ? 'Opening Portal...' : '🏦 Launch Plaid Link Frame'}
+                                        {plaidLoading ? 'Opening Portal...' : '🏦 Connect via Plaid Link'}
                                     </button>
                                 )}
                             </div>

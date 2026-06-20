@@ -32,8 +32,28 @@ export async function savePlaidCredentials(clientId: string, secret: string): Pr
 	}
 }
 
-export async function getPlaidLinkToken(): Promise<string> {
+export async function savePlaidToken(accessToken: string): Promise<void> {
 	const config = await loadConfig()
+	const token = await getValidIdToken()
+
+	if (!token) throw new Error('Not authenticated')
+
+	const response = await fetch(`${config.apiUrl.replace(/\/$/, '')}/bank/token`, {
+		method: 'POST',
+		headers: {
+			'Authorization': token,
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({ accessToken })
+	})
+
+	if (!response.ok) {
+		const errData = await response.json().catch(() => ({}))
+		throw new Error(errData.message || 'Failed to save Plaid token')
+	}
+}
+
+export async function getPlaidLinkToken(): Promise<string> {	const config = await loadConfig()
 	const token = await getValidIdToken()
 
 	if (!token) throw new Error('Not authenticated')

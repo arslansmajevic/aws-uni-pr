@@ -255,6 +255,19 @@ export class StorageConstruct extends Construct {
       },
     });
 
+    // Post-save: reconcile the receipt against the user's bank transactions
+    // using their Plaid access token (stored only in Secrets Manager).
+    const matchTransactionLambda = new Function(this, "MatchTransactionLambda", {
+      runtime: Runtime.PYTHON_3_12,
+      handler: "match_transaction.handler",
+      code: Code.fromAsset(pipelinePath),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      environment: {
+        RECEIPTS_TABLE_NAME: this.receiptsTable.tableName,
+      },
+    });
+
     // --- S3 permissions ---
 
     // Trigger: read the uploaded file (for ETag in idempotency).
@@ -296,6 +309,19 @@ export class StorageConstruct extends Construct {
     this.receiptsTable.grantWriteData(triggerLambda);
     this.receiptsTable.grantWriteData(saveLambda);
     this.receiptsTable.grantWriteData(errorHandlerLambda);
+    this.receiptsTable.grantReadWriteData(matchTransactionLambda);
+
+    // --- Plaid (Secrets Manager) permissions for transaction matching ---
+    // Read the shared Plaid credentials and the per-user access token only.
+    matchTransactionLambda.addToRolePolicy(
+      new PolicyStatement({
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [
+          `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${account}:secret:plaid/credentials*`,
+          `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${account}:secret:plaid/access-token/*`,
+        ],
+      })
+    );
 
     // --- Textract permissions ---
     const textractAnalyzeExpensePolicy = new PolicyStatement({
@@ -348,7 +374,7 @@ export class StorageConstruct extends Construct {
     const stageNames = [
       "Preflight", "AnalyzeExpense", "Normalize",
       "Validate", "AnalyzeDocumentFallback", "RepairItems",
-      "MergeRepair", "ValidateAfterRepair", "Save",
+      "MergeRepair", "ValidateAfterRepair", "Save", "MatchTransaction",
     ];
     const errorPasses: Record<string, sfn.Pass> = {};
     stageNames.forEach((name) => {
@@ -402,6 +428,18 @@ export class StorageConstruct extends Construct {
     });
     saveTask.addRetry({ errors: ["States.TaskFailed"], interval: Duration.seconds(3), maxAttempts: 2, backoffRate: 2 });
     saveTask.addCatch(errorPasses["Save"], errorCatchProps);
+
+    // Post-save: match the receipt to a bank transaction (best-effort).
+    const matchTransactionTask = new tasks.LambdaInvoke(this, "MatchTransaction", {
+      lambdaFunction: matchTransactionLambda,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    matchTransactionTask.addRetry({ errors: ["States.TaskFailed"], interval: Duration.seconds(3), maxAttempts: 1, backoffRate: 2 });
+    matchTransactionTask.addCatch(errorPasses["MatchTransaction"], errorCatchProps);
+
+    // Every successful save continues into transaction matching.
+    saveTask.next(matchTransactionTask);
 
     // --- Repair branch tasks ---
 
