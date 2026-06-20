@@ -60,7 +60,9 @@ def extract_credentials(event):
 
     client_id = _first_string(body, ("clientId", "client_id", "plaidClientId"))
     secret = _first_string(body, ("secret", "plaidSecret", "clientSecret"))
-    env = _first_string(body, ("env", "environment")) or "sandbox"
+    env = _first_string(body, ("env", "environment"))
+    if env not in ("sandbox", "development", "production"):
+        env = "sandbox"
     return client_id, secret, env
 
 

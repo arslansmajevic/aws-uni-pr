@@ -120,6 +120,12 @@ class ExtractCredentialsTests(unittest.TestCase):
         )
         self.assertEqual(env, "sandbox")
 
+    def test_unknown_env_falls_back_to_sandbox(self):
+        _, _, env = savePlaidCredentials.extract_credentials(
+            self._event('{"clientId": "cid", "secret": "sec", "env": "../evil"}')
+        )
+        self.assertEqual(env, "sandbox")
+
 
 class TransactionHelpersTests(unittest.TestCase):
     def test_amount_uses_absolute_value(self):
