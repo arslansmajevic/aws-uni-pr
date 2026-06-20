@@ -20,6 +20,7 @@ recorded in ``transactionMatchStatus`` and the receipt is left COMPLETED.
 
 import json
 import os
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 import boto3
@@ -153,8 +154,6 @@ def _get_plaid_creds():
 
 
 def _plaid_post(base_url, path, payload):
-    import urllib.request
-
     req = urllib.request.Request(
         f"{base_url}{path}",
         data=json.dumps(payload).encode("utf-8"),
@@ -174,6 +173,8 @@ def _create_access_token(creds):
     """
     base_url = PLAID_URLS.get(creds.get("env"), PLAID_URLS["sandbox"])
 
+    # ins_109508 is Plaid's default sandbox test institution ("First Platypus
+    # Bank"); callers may override it via the stored credentials.
     public = _plaid_post(base_url, "/sandbox/public_token/create", {
         "client_id": creds["clientId"],
         "secret": creds["secret"],
@@ -193,8 +194,6 @@ def _create_access_token(creds):
 
 
 def _fetch_transactions(creds, access_token, start_date, end_date):
-    import urllib.request
-
     base_url = PLAID_URLS.get(creds.get("env"), PLAID_URLS["sandbox"])
     payload = json.dumps({
         "client_id": creds["clientId"],

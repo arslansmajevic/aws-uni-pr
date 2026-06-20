@@ -40,7 +40,7 @@ def handler(event, context):
                 ForceDeleteWithoutRecovery=True,
             )
             deleted_any = True
-            print(f"Deleted Plaid secret {secret_name} for user {user_id}")
+            print(f"Deleted Plaid secret for user {user_id}")
         except secrets.exceptions.ResourceNotFoundException:
             # Nothing stored under this name; treat as success.
             continue
@@ -49,6 +49,8 @@ def handler(event, context):
             return http_response(500, {"message": "Internal server error"})
 
     return http_response(200, {
+        # ``deleted`` indicates whether any Plaid secret actually existed and was
+        # removed; the request still succeeds (idempotent) when nothing was set.
         "message": "Bank account disconnected successfully",
         "deleted": deleted_any,
     })
