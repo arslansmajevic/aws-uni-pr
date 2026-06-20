@@ -6,10 +6,12 @@ transactions using their stored Plaid access token. A receipt is matched to a
 transaction when the **amount** and the **timestamp** (date) line up within a
 small tolerance.
 
-The user's Plaid access token lives only in Secrets Manager
-(``plaid/access-token/{userId}``) — it is never read from or written to
-DynamoDB. Only the resulting match metadata (transaction id, name, amount,
-date) is persisted on the receipt.
+The user's Plaid credentials live only in Secrets Manager. Either the user's
+own ``client_id``/``secret`` (``plaid/credentials/{userId}``) — which are used
+to mint and exchange a token at match time — or a directly-registered access
+token (``plaid/access-token/{userId}``). Neither is ever written to DynamoDB;
+only the resulting match metadata (transaction id, name, amount, date) is
+persisted on the receipt.
 
 This stage is best-effort: a missing token, a Plaid outage, or simply finding
 no candidate transaction must never fail the pipeline. Every such case is
@@ -128,9 +130,66 @@ def _get_access_token(user_id):
     return data.get("accessToken")
 
 
+def _get_user_credentials(user_id):
+    """Return the user's own Plaid ``client_id``/``secret`` (or None).
+
+    These are the per-user credentials registered via ``POST /bank/config`` and
+    stored at ``plaid/credentials/{userId}``. They are used to authenticate to
+    Plaid and derive an access token at match time.
+    """
+    try:
+        secret = secrets.get_secret_value(SecretId=f"plaid/credentials/{user_id}")
+    except secrets.exceptions.ResourceNotFoundException:
+        return None
+    data = json.loads(secret["SecretString"])
+    if data.get("clientId") and data.get("secret"):
+        return data
+    return None
+
+
 def _get_plaid_creds():
     secret = secrets.get_secret_value(SecretId="plaid/credentials")
     return json.loads(secret["SecretString"])
+
+
+def _plaid_post(base_url, path, payload):
+    import urllib.request
+
+    req = urllib.request.Request(
+        f"{base_url}{path}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read())
+
+
+def _create_access_token(creds):
+    """Authenticate with the user's credentials to derive a Plaid access token.
+
+    In the sandbox flow we mint a public token for a test institution and
+    immediately exchange it for an access token, mirroring what a real Plaid
+    Link connection would yield.
+    """
+    base_url = PLAID_URLS.get(creds.get("env"), PLAID_URLS["sandbox"])
+
+    public = _plaid_post(base_url, "/sandbox/public_token/create", {
+        "client_id": creds["clientId"],
+        "secret": creds["secret"],
+        "institution_id": creds.get("institutionId", "ins_109508"),
+        "initial_products": ["transactions"],
+    })
+    public_token = public.get("public_token")
+    if not public_token:
+        return None
+
+    exchanged = _plaid_post(base_url, "/item/public_token/exchange", {
+        "client_id": creds["clientId"],
+        "secret": creds["secret"],
+        "public_token": public_token,
+    })
+    return exchanged.get("access_token")
 
 
 def _fetch_transactions(creds, access_token, start_date, end_date):
@@ -201,9 +260,21 @@ def handler(event, context):
     status = "NO_MATCH"
     matched = None
     try:
-        access_token = _get_access_token(user_id)
+        user_creds = _get_user_credentials(user_id)
+        access_token = None
+
+        if user_creds:
+            # Preferred flow: authenticate with the user's own credentials and
+            # derive an access token to query their transactions.
+            creds = user_creds
+            access_token = _create_access_token(user_creds)
+        else:
+            # Fallback: a directly-registered access token plus shared creds.
+            access_token = _get_access_token(user_id)
+            creds = _get_plaid_creds() if access_token else None
+
         if not access_token:
-            print(f"[Match] No Plaid token for user {user_id}; skipping match.")
+            print(f"[Match] No Plaid connection for user {user_id}; skipping match.")
             _record_match(user_id, receipt_id, "NO_BANK_CONNECTION")
             event["transactionMatchStatus"] = "NO_BANK_CONNECTION"
             return event
@@ -224,7 +295,6 @@ def handler(event, context):
         start_date = (center - timedelta(days=MAX_DAY_DIFF)).strftime("%Y-%m-%d")
         end_date = (center + timedelta(days=MAX_DAY_DIFF)).strftime("%Y-%m-%d")
 
-        creds = _get_plaid_creds()
         transactions = _fetch_transactions(
             creds, access_token, start_date, end_date
         )

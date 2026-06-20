@@ -334,6 +334,42 @@
       "response": []
     },
     {
+      "name": "Plaid List Transactions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"client_id\": \"{{plaidClientId}}\",\n  \"secret\": \"{{plaidSecret}}\",\n  \"access_token\": \"{{plaidAccessToken}}\",\n  \"start_date\": \"2024-01-01\",\n  \"end_date\": \"2024-12-31\",\n  \"options\": {\n    \"count\": 250,\n    \"offset\": 0\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://sandbox.plaid.com/transactions/get",
+          "protocol": "https",
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "transactions",
+            "get"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
       "name": "Receipts Summary",
       "request": {
         "method": "GET",

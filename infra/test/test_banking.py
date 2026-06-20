@@ -28,6 +28,7 @@ os.environ.setdefault("RECEIPTS_TABLE_NAME", "test-table")
 os.environ.setdefault("AWS_DEFAULT_REGION", "eu-central-1")
 
 import savePlaidToken  # noqa: E402
+import savePlaidCredentials  # noqa: E402
 import match_transaction  # noqa: E402
 
 
@@ -69,6 +70,55 @@ class ExtractTokenTests(unittest.TestCase):
         self.assertIsNone(
             savePlaidToken.extract_token(self._event('{"accessToken": 123}'))
         )
+
+
+class ExtractCredentialsTests(unittest.TestCase):
+    def _event(self, body):
+        return {"body": body}
+
+    def test_client_id_and_secret(self):
+        cid, secret, env = savePlaidCredentials.extract_credentials(
+            self._event('{"clientId": "cid", "secret": "sec"}')
+        )
+        self.assertEqual((cid, secret, env), ("cid", "sec", "sandbox"))
+
+    def test_alias_fields(self):
+        cid, secret, env = savePlaidCredentials.extract_credentials(
+            self._event('{"client_id": "cid", "plaidSecret": "sec", "env": "production"}')
+        )
+        self.assertEqual((cid, secret, env), ("cid", "sec", "production"))
+
+    def test_trims_whitespace(self):
+        cid, secret, _ = savePlaidCredentials.extract_credentials(
+            self._event('{"clientId": "  cid  ", "secret": "  sec  "}')
+        )
+        self.assertEqual((cid, secret), ("cid", "sec"))
+
+    def test_missing_secret(self):
+        cid, secret, _ = savePlaidCredentials.extract_credentials(
+            self._event('{"clientId": "cid"}')
+        )
+        self.assertEqual(cid, "cid")
+        self.assertIsNone(secret)
+
+    def test_blank_values(self):
+        cid, secret, _ = savePlaidCredentials.extract_credentials(
+            self._event('{"clientId": "   ", "secret": "   "}')
+        )
+        self.assertIsNone(cid)
+        self.assertIsNone(secret)
+
+    def test_invalid_json(self):
+        self.assertEqual(
+            savePlaidCredentials.extract_credentials(self._event("not json")),
+            (None, None, None),
+        )
+
+    def test_default_env_is_sandbox(self):
+        _, _, env = savePlaidCredentials.extract_credentials(
+            self._event('{"clientId": "cid", "secret": "sec"}')
+        )
+        self.assertEqual(env, "sandbox")
 
 
 class TransactionHelpersTests(unittest.TestCase):
