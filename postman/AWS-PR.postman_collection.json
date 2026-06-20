@@ -223,6 +223,117 @@
       "response": []
     },
     {
+      "name": "Plaid Create Custom User Token (seed transactions)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"client_id\": \"{{plaidClientId}}\",\n  \"secret\": \"{{plaidSecret}}\",\n  \"institution_id\": \"ins_109508\",\n  \"initial_products\": [\"transactions\"],\n  \"options\": {\n    \"override_username\": \"user_custom\",\n    \"override_password\": \"{\\\"override_accounts\\\":[{\\\"type\\\":\\\"depository\\\",\\\"subtype\\\":\\\"checking\\\",\\\"transactions\\\":[{\\\"date_transacted\\\":\\\"2024-05-01\\\",\\\"date_posted\\\":\\\"2024-05-01\\\",\\\"amount\\\":42.17,\\\"description\\\":\\\"Coffee Shop\\\",\\\"currency\\\":\\\"USD\\\"}]}]}\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://sandbox.plaid.com/sandbox/public_token/create",
+          "protocol": "https",
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "sandbox",
+            "public_token",
+            "create"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Plaid Exchange Public Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"client_id\": \"{{plaidClientId}}\",\n  \"secret\": \"{{plaidSecret}}\",\n  \"public_token\": \"{{publicToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://sandbox.plaid.com/item/public_token/exchange",
+          "protocol": "https",
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "item",
+            "public_token",
+            "exchange"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Plaid Add Transaction (Sandbox)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"client_id\": \"{{plaidClientId}}\",\n  \"secret\": \"{{plaidSecret}}\",\n  \"access_token\": \"{{plaidAccessToken}}\",\n  \"transactions\": [\n    {\n      \"date_transacted\": \"2024-05-01\",\n      \"date_posted\": \"2024-05-01\",\n      \"amount\": 42.17,\n      \"description\": \"Coffee Shop\",\n      \"iso_currency_code\": \"USD\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://sandbox.plaid.com/sandbox/transactions/create",
+          "protocol": "https",
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "sandbox",
+            "transactions",
+            "create"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
       "name": "Receipts Summary",
       "request": {
         "method": "GET",
@@ -270,6 +381,22 @@
     },
     {
       "key": "token",
+      "value": ""
+    },
+    {
+      "key": "plaidClientId",
+      "value": ""
+    },
+    {
+      "key": "plaidSecret",
+      "value": ""
+    },
+    {
+      "key": "publicToken",
+      "value": ""
+    },
+    {
+      "key": "plaidAccessToken",
       "value": ""
     }
   ]
