@@ -53,7 +53,8 @@ export async function savePlaidToken(accessToken: string): Promise<void> {
 	}
 }
 
-export async function getPlaidLinkToken(): Promise<string> {	const config = await loadConfig()
+export async function getPlaidLinkToken(): Promise<string> {
+	const config = await loadConfig()
 	const token = await getValidIdToken()
 
 	if (!token) throw new Error('Not authenticated')
