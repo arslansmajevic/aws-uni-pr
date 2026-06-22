@@ -23,9 +23,7 @@
         },
         "url": {
           "raw": "{{backendUrl}}register",
-          "host": [
-            "{{backendUrl}}register"
-          ]
+          "host": ["{{backendUrl}}register"]
         }
       },
       "response": []
@@ -46,9 +44,7 @@
         },
         "url": {
           "raw": "{{backendUrl}}refresh",
-          "host": [
-            "{{backendUrl}}refresh"
-          ]
+          "host": ["{{backendUrl}}refresh"]
         }
       },
       "response": []
@@ -69,9 +65,7 @@
         },
         "url": {
           "raw": "{{backendUrl}}login",
-          "host": [
-            "{{backendUrl}}login"
-          ]
+          "host": ["{{backendUrl}}login"]
         }
       },
       "response": []
@@ -89,9 +83,7 @@
         ],
         "url": {
           "raw": "{{backendUrl}}users",
-          "host": [
-            "{{backendUrl}}users"
-          ]
+          "host": ["{{backendUrl}}users"]
         }
       },
       "response": []
@@ -126,9 +118,7 @@
         },
         "url": {
           "raw": "{{backendUrl}}image",
-          "host": [
-            "{{backendUrl}}image"
-          ]
+          "host": ["{{backendUrl}}image"]
         }
       },
       "response": []
@@ -146,9 +136,7 @@
         ],
         "url": {
           "raw": "{{backendUrl}}receipts",
-          "host": [
-            "{{backendUrl}}receipts"
-          ]
+          "host": ["{{backendUrl}}receipts"]
         }
       },
       "response": []
@@ -175,12 +163,8 @@
         },
         "url": {
           "raw": "{{backendUrl}}bank/exchange",
-          "host": [
-            "{{backendUrl}}bank"
-          ],
-          "path": [
-            "exchange"
-          ]
+          "host": ["{{backendUrl}}bank"],
+          "path": ["exchange"]
         }
       },
       "response": []
@@ -208,16 +192,8 @@
         "url": {
           "raw": "https://sandbox.plaid.com/sandbox/public_token/create",
           "protocol": "https",
-          "host": [
-            "sandbox",
-            "plaid",
-            "com"
-          ],
-          "path": [
-            "sandbox",
-            "public_token",
-            "create"
-          ]
+          "host": ["sandbox", "plaid", "com"],
+          "path": ["sandbox", "public_token", "create"]
         }
       },
       "response": []
@@ -245,16 +221,8 @@
         "url": {
           "raw": "https://sandbox.plaid.com/sandbox/public_token/create",
           "protocol": "https",
-          "host": [
-            "sandbox",
-            "plaid",
-            "com"
-          ],
-          "path": [
-            "sandbox",
-            "public_token",
-            "create"
-          ]
+          "host": ["sandbox", "plaid", "com"],
+          "path": ["sandbox", "public_token", "create"]
         }
       },
       "response": []
@@ -282,16 +250,8 @@
         "url": {
           "raw": "https://sandbox.plaid.com/item/public_token/exchange",
           "protocol": "https",
-          "host": [
-            "sandbox",
-            "plaid",
-            "com"
-          ],
-          "path": [
-            "item",
-            "public_token",
-            "exchange"
-          ]
+          "host": ["sandbox", "plaid", "com"],
+          "path": ["item", "public_token", "exchange"]
         }
       },
       "response": []
@@ -319,16 +279,8 @@
         "url": {
           "raw": "https://sandbox.plaid.com/sandbox/transactions/create",
           "protocol": "https",
-          "host": [
-            "sandbox",
-            "plaid",
-            "com"
-          ],
-          "path": [
-            "sandbox",
-            "transactions",
-            "create"
-          ]
+          "host": ["sandbox", "plaid", "com"],
+          "path": ["sandbox", "transactions", "create"]
         }
       },
       "response": []
@@ -356,15 +308,8 @@
         "url": {
           "raw": "https://sandbox.plaid.com/transactions/get",
           "protocol": "https",
-          "host": [
-            "sandbox",
-            "plaid",
-            "com"
-          ],
-          "path": [
-            "transactions",
-            "get"
-          ]
+          "host": ["sandbox", "plaid", "com"],
+          "path": ["transactions", "get"]
         }
       },
       "response": []
@@ -393,9 +338,7 @@
         "type": "text/javascript",
         "packages": {},
         "requests": {},
-        "exec": [
-          ""
-        ]
+        "exec": [""]
       }
     },
     {
@@ -404,16 +347,14 @@
         "type": "text/javascript",
         "packages": {},
         "requests": {},
-        "exec": [
-          ""
-        ]
+        "exec": [""]
       }
     }
   ],
   "variable": [
     {
       "key": "backendUrl",
-      "value": ""
+      "value": "https://localhost:8080/"
     },
     {
       "key": "token",
