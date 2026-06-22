@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getValidUserClaims, logout } from '../../services/authentication'
-import { getPlaidLinkToken, exchangePlaidPublicToken, disconnectBank, getBankStatus } from '../../services/banking'
+import { getPlaidLinkToken, exchangePlaidPublicToken, disconnectBank, getBankStatus, savePlaidCredentials } from '../../services/banking'
 
 type UserInfo = {
     givenName: string
@@ -19,6 +19,9 @@ export function UserPage() {
     const [isBankConnected, setIsBankConnected] = useState(false)
     const [plaidLoading, setPlaidLoading] = useState(false)
     const [plaidError, setPlaidError] = useState<string | null>(null)
+    const [plaidClientId, setPlaidClientId] = useState('')
+    const [plaidSecret, setPlaidSecret] = useState('')
+    const [tokenSaved, setTokenSaved] = useState(false)
 
     useEffect(() => {
         let isMounted = true
@@ -121,8 +124,39 @@ export function UserPage() {
             localStorage.removeItem('isBankConnected')
             localStorage.setItem('bankStatusUpdatedAt', Date.now().toString())
             setIsBankConnected(false)
+            setTokenSaved(false)
         } catch (err) {
             setPlaidError(err instanceof Error ? err.message : 'Failed to disconnect bank account.')
+        } finally {
+            setPlaidLoading(false)
+        }
+    }
+
+    async function handleSaveCredentials(event: React.FormEvent) {
+        event.preventDefault()
+
+        const clientId = plaidClientId.trim()
+        const secret = plaidSecret.trim()
+        if (!clientId || !secret) {
+            setPlaidError('Enter both your Plaid client ID and secret to register.')
+            return
+        }
+
+        try {
+            setPlaidLoading(true)
+            setPlaidError(null)
+            setTokenSaved(false)
+            await savePlaidCredentials(clientId, secret)
+
+            // Never keep the credentials in memory or on screen once stored.
+            setPlaidClientId('')
+            setPlaidSecret('')
+            setTokenSaved(true)
+            localStorage.setItem('isBankConnected', 'true')
+            localStorage.setItem('bankStatusUpdatedAt', Date.now().toString())
+            setIsBankConnected(true)
+        } catch (err) {
+            setPlaidError(err instanceof Error ? err.message : 'Failed to save Plaid credentials.')
         } finally {
             setPlaidLoading(false)
         }
@@ -173,28 +207,58 @@ export function UserPage() {
                             <div>
                                 {isBankConnected ? (
                                     <div className="p-3 bg-light border border-success rounded-3 mb-3 small">
-                                        <span className="text-success fw-bold">✓ Live Ledger Synced</span>
-                                        <p className="text-secondary mb-0 mt-1">Token infrastructure securely managed inside AWS Secrets Manager.</p>
+                                        <span className="text-success fw-bold">✓ Credentials registered</span>
+                                        <p className="text-secondary mb-0 mt-1">Your Plaid client ID and secret are securely stored inside AWS Secrets Manager and are never displayed here.</p>
                                     </div>
                                 ) : (
                                     <div className="p-3 bg-light border border-info rounded-3 mb-3 small">
-                                        <span className="text-info fw-bold">ℹ Vault Credentials Ready</span>
-                                        <p className="text-secondary mb-0 mt-1">AWS infrastructure is fully primed to accept tokens.</p>
+                                        <span className="text-info fw-bold">ℹ No credentials registered</span>
+                                        <p className="text-secondary mb-0 mt-1">Register your Plaid client ID and secret to enable automatic receipt-to-transaction matching.</p>
                                     </div>
                                 )}
 
+                                <form onSubmit={handleSaveCredentials} className="mb-3">
+                                    <label htmlFor="plaidClientId" className="form-label small fw-semibold mb-1">
+                                        {isBankConnected ? 'Replace Plaid credentials' : 'Register Plaid credentials'}
+                                    </label>
+                                    <input
+                                        id="plaidClientId"
+                                        type="text"
+                                        className="form-control form-control-sm mb-2"
+                                        placeholder="Client ID"
+                                        value={plaidClientId}
+                                        autoComplete="off"
+                                        onChange={(e) => { setPlaidClientId(e.target.value); setTokenSaved(false) }}
+                                        disabled={plaidLoading}
+                                    />
+                                    <input
+                                        id="plaidSecret"
+                                        type="password"
+                                        className="form-control form-control-sm mb-2"
+                                        placeholder="Sandbox secret"
+                                        value={plaidSecret}
+                                        autoComplete="off"
+                                        onChange={(e) => { setPlaidSecret(e.target.value); setTokenSaved(false) }}
+                                        disabled={plaidLoading}
+                                    />
+                                    <button type="submit" className="btn btn-primary w-100 btn-sm" disabled={plaidLoading}>
+                                        {plaidLoading ? 'Saving...' : (isBankConnected ? 'Update credentials' : 'Save credentials')}
+                                    </button>
+                                    {tokenSaved && <p className="text-success small mb-0 mt-2">Credentials saved securely.</p>}
+                                </form>
+
                                 {isBankConnected ? (
                                     <button type="button" className="btn btn-outline-danger w-100 btn-sm" onClick={handleDisconnectBank} disabled={plaidLoading}>
-                                        Disconnect Account Feed
+                                        Delete credentials
                                     </button>
                                 ) : (
                                     <button 
                                         type="button" 
-                                        className="btn btn-primary w-100 mb-2 btn-sm" 
+                                        className="btn btn-outline-secondary w-100 btn-sm" 
                                         onClick={handleConnectBank} 
                                         disabled={plaidLoading}
                                     >
-                                        {plaidLoading ? 'Opening Portal...' : '🏦 Launch Plaid Link Frame'}
+                                        {plaidLoading ? 'Opening Portal...' : '🏦 Connect via Plaid Link'}
                                     </button>
                                 )}
                             </div>

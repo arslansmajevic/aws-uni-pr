@@ -25,6 +25,27 @@ CORS_HEADERS = {
 }
 
 
+def collect_image_keys(receipt):
+    """Return an ordered, de-duplicated list of S3 keys for a receipt.
+
+    Multi-image receipts store every page in ``imageKeys``; single-image and
+    legacy records only have the scalar ``s3ObjectKey`` (or older aliases).
+    The primary key is always kept first so the browser opens on it.
+    """
+    primary_key = receipt.get("s3ObjectKey") or receipt.get("key") or receipt.get("objectKey")
+
+    image_keys = receipt.get("imageKeys")
+    if not isinstance(image_keys, list):
+        image_keys = []
+
+    ordered = []
+    for key in [primary_key, *image_keys]:
+        if key and key not in ordered:
+            ordered.append(key)
+
+    return ordered
+
+
 def http_response(status_code, body):
     return {
         "statusCode": status_code,
@@ -115,6 +136,16 @@ def handler(event, context):
 
         s3_key = receipt.get("s3ObjectKey") or receipt.get("key") or receipt.get("objectKey")
 
+        image_keys = collect_image_keys(receipt)
+        image_urls = [
+            url
+            for url in (generate_presigned_url(key) for key in image_keys)
+            if url
+        ]
+        primary_image_url = image_urls[0] if image_urls else (
+            generate_presigned_url(s3_key) if s3_key else None
+        )
+
         response_body = {
             "receiptId": receipt.get("receiptId", receipt_id),
             "merchantName": receipt.get("merchantName"),
@@ -123,13 +154,15 @@ def handler(event, context):
             "category": receipt.get("category"),
             "totalAmount": receipt.get("totalAmount"),
             "currency": receipt.get("currency") or "USD",
+            "processingStatus": receipt.get("processingStatus"),
             "transactionMatchStatus": receipt.get("transactionMatchStatus"),
             "matchedTransactionName": receipt.get("matchedTransactionName"),
             "matchedTransactionId": receipt.get("matchedTransactionId"),
             "matchedAmount": receipt.get("matchedAmount"),
             "matchedDate": receipt.get("matchedDate"),
             "receiptItems": normalize_receipt_items(receipt),
-            "imageUrl": generate_presigned_url(s3_key) if s3_key else None,
+            "imageUrl": primary_image_url,
+            "imageUrls": image_urls,
         }
 
         return http_response(200, response_body)

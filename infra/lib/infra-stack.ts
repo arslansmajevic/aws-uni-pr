@@ -36,6 +36,12 @@ export class InfraStack extends cdk.Stack {
           jwtRequired: jwtRequiredFlag,
         },
         {
+          function: storageConstruct.addReceiptImageLambda,
+          method: "POST",
+          resourcePath: "receipts/{receiptId}/image",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
           function: authenticationConstruct.registerLambda,
           method: "POST",
           resourcePath: "register",
@@ -105,6 +111,18 @@ export class InfraStack extends cdk.Stack {
           function: bankingConstruct.exchangeTokenLambda,
           method: "POST",
           resourcePath: "bank/exchange",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: bankingConstruct.savePlaidTokenLambda,
+          method: "POST",
+          resourcePath: "bank/token",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: bankingConstruct.savePlaidCredentialsLambda,
+          method: "POST",
+          resourcePath: "bank/config",
           jwtRequired: jwtRequiredFlag,
         },
         {

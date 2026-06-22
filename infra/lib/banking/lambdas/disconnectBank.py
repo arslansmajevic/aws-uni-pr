@@ -27,26 +27,30 @@ def handler(event, context):
     if not user_id:
         return http_response(401, {"message": "Unauthorized"})
 
-    secret_name = f"plaid/access-token/{user_id}"
+    # Remove both the user's own credentials and any directly-registered access
+    # token so disconnecting fully clears their Plaid connection.
+    deleted_any = False
+    for secret_name in (
+        f"plaid/credentials/{user_id}",
+        f"plaid/access-token/{user_id}",
+    ):
+        try:
+            secrets.delete_secret(
+                SecretId=secret_name,
+                ForceDeleteWithoutRecovery=True,
+            )
+            deleted_any = True
+            print(f"Deleted Plaid secret for user {user_id}")
+        except secrets.exceptions.ResourceNotFoundException:
+            # Nothing stored under this name; treat as success.
+            continue
+        except Exception as e:
+            print(f"Error disconnecting bank for user {user_id}: {str(e)}")
+            return http_response(500, {"message": "Internal server error"})
 
-    try:
-        secrets.delete_secret(
-            SecretId=secret_name,
-            ForceDeleteWithoutRecovery=True,
-        )
-        print(f"Deleted Plaid access token secret for user {user_id}")
-
-        return http_response(200, {
-            "message": "Bank account disconnected successfully",
-        })
-
-    except secrets.exceptions.ResourceNotFoundException:
-        # Nothing was connected in the first place; treat as success
-        # so the frontend can safely call this even if state is unclear.
-        return http_response(200, {
-            "message": "Bank account disconnected successfully",
-        })
-
-    except Exception as e:
-        print(f"Error disconnecting bank for user {user_id}: {str(e)}")
-        return http_response(500, {"message": "Internal server error"})
+    return http_response(200, {
+        # ``deleted`` indicates whether any Plaid secret actually existed and was
+        # removed; the request still succeeds (idempotent) when nothing was set.
+        "message": "Bank account disconnected successfully",
+        "deleted": deleted_any,
+    })

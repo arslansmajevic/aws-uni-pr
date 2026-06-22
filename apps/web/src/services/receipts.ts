@@ -39,8 +39,10 @@ export type ReceiptSummaryResponse = {
 	category?: string | null
 	totalAmount?: string | number | null
 	currency?: string | null
+	processingStatus?: string | null
 	receiptItems?: ReceiptSummaryItem[]
 	imageUrl?: string | null
+	imageUrls?: string[] | null
 	transactionMatchStatus?: string | null
 	matchedTransactionName?: string | null
 	matchedTransactionId?: string | null
@@ -190,4 +192,38 @@ export async function getReceiptSummary(receiptId: string): Promise<ReceiptSumma
 	}
 
 	return (await response.json()) as ReceiptSummaryResponse
+}
+
+export async function addReceiptImage(receiptId: string, file: File): Promise<MultiUploadResponse> {
+	const config = await loadConfig()
+	const token = await getValidIdToken()
+
+	if (!token) {
+		throw new Error('User is not authenticated. Please log in again.')
+	}
+
+	const imageBase64 = await fileToBase64(file)
+
+	const response = await fetch(
+		`${config.apiUrl.replace(/\/$/, '')}/receipts/${receiptId}/image`,
+		{
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': token,
+			},
+			body: JSON.stringify({
+				fileName: file.name,
+				contentType: file.type || 'application/octet-stream',
+				imageBase64,
+			}),
+		}
+	)
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({}))
+		throw new Error(errorData.message || `Failed to add image with status ${response.status}`)
+	}
+
+	return (await response.json()) as MultiUploadResponse
 }

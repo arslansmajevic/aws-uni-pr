@@ -27,18 +27,20 @@ def handler(event, context):
     if not user_id:
         return http_response(401, {"message": "Unauthorized"})
 
-    secret_name = f"plaid/access-token/{user_id}"
+    # The user is "registered" if either their own Plaid credentials
+    # (client_id + secret) or a directly-registered access token exist. We only
+    # describe the secrets so the stored values never enter this response.
+    for secret_name in (
+        f"plaid/credentials/{user_id}",
+        f"plaid/access-token/{user_id}",
+    ):
+        try:
+            secrets.describe_secret(SecretId=secret_name)
+            return http_response(200, {"connected": True})
+        except secrets.exceptions.ResourceNotFoundException:
+            continue
+        except Exception as e:
+            print(f"Error checking bank status for user {user_id}: {str(e)}")
+            return http_response(500, {"message": "Internal server error"})
 
-    try:
-        # We only need to know whether the secret exists, so we describe it
-        # rather than fetching its value. This keeps the access token itself
-        # out of this Lambda's response entirely.
-        secrets.describe_secret(SecretId=secret_name)
-        return http_response(200, {"connected": True})
-
-    except secrets.exceptions.ResourceNotFoundException:
-        return http_response(200, {"connected": False})
-
-    except Exception as e:
-        print(f"Error checking bank status for user {user_id}: {str(e)}")
-        return http_response(500, {"message": "Internal server error"})
+    return http_response(200, {"connected": False})
