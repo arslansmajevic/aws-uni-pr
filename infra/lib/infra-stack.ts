@@ -4,6 +4,7 @@ import { StorageConstruct } from './storage/storage-construct';
 import { GatewayConstruct } from './gateway/gateway-construct';
 import { AuthenticationConstruct } from './authentication/authentication-construct';
 import { BankingConstruct } from './banking/banking-constructs';
+import { SharingConstruct } from './sharing/sharing-construct';
 
 export class InfraStack extends cdk.Stack {
   public readonly apiUrl: string;
@@ -18,6 +19,11 @@ export class InfraStack extends cdk.Stack {
       "Authentication",
     );
     var bankingConstruct = new BankingConstruct(this, "Banking");
+
+    var sharingConstruct = new SharingConstruct(this, "Sharing", {
+      receiptsTable: storageConstruct.receiptsTable,
+      bucket: storageConstruct.bucket,
+    });
 
     const jwtRequiredFlag = true;
 
@@ -135,6 +141,42 @@ export class InfraStack extends cdk.Stack {
           function: bankingConstruct.getBankStatusLambda,
           method: "GET",
           resourcePath: "bank/status",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: sharingConstruct.addShareLambda,
+          method: "POST",
+          resourcePath: "shares",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: sharingConstruct.listSharesLambda,
+          method: "GET",
+          resourcePath: "shares",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: sharingConstruct.removeShareLambda,
+          method: "DELETE",
+          resourcePath: "shares/{viewerId}",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: sharingConstruct.listSharedWithMeLambda,
+          method: "GET",
+          resourcePath: "shared-with-me",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: sharingConstruct.getSharedReceiptsLambda,
+          method: "GET",
+          resourcePath: "shared/{ownerId}/receipts",
+          jwtRequired: jwtRequiredFlag,
+        },
+        {
+          function: sharingConstruct.getSharedReceiptSummaryLambda,
+          method: "GET",
+          resourcePath: "shared/{ownerId}/receipts/{receiptId}",
           jwtRequired: jwtRequiredFlag,
         },
       ],
