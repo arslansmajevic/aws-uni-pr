@@ -13,6 +13,7 @@ import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
 import { ManageSharingPage } from './pages/sharing/ManageSharingPage'
 import { SharedReceiptsPage } from './pages/sharing/SharedReceiptsPage'
 import { SharedOwnerReceiptsPage } from './pages/sharing/SharedOwnerReceiptsPage'
+import { SharedReceiptSummaryPage } from './pages/sharing/SharedReceiptSummaryPage'
 
 function App() {
   return (
@@ -77,6 +78,14 @@ function App() {
         element={
           <ProtectedRoute>
             <SharedOwnerReceiptsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/shared/:ownerId/:receiptId"
+        element={
+          <ProtectedRoute>
+            <SharedReceiptSummaryPage />
           </ProtectedRoute>
         }
       />

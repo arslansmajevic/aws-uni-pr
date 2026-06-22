@@ -1,5 +1,6 @@
 // apps/web/src/services/sharing.ts
 import { getValidIdToken } from './authentication'
+import type { ReceiptSummaryResponse } from './receipts'
 
 type AppConfig = {
 	apiUrl: string
@@ -139,4 +140,21 @@ export async function getSharedReceipts(ownerId: string): Promise<any[]> {
 
 	const data = await response.json()
 	return (data.receipts || []) as any[]
+}
+
+export async function getSharedReceiptSummary(
+	ownerId: string,
+	receiptId: string
+): Promise<ReceiptSummaryResponse> {
+	const response = await authorizedFetch(
+		`/shared/${encodeURIComponent(ownerId)}/receipts/${encodeURIComponent(receiptId)}`,
+		{ method: 'GET' }
+	)
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({}))
+		throw new Error(errorData.message || 'Failed to load shared receipt summary')
+	}
+
+	return (await response.json()) as ReceiptSummaryResponse
 }
