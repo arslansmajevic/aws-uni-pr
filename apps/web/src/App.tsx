@@ -10,6 +10,10 @@ import { ReceiptSummary } from './pages/receipt/ReceiptSummary'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ChangePasswordPage } from './pages/user/ChangePasswordPage'
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
+import { ManageSharingPage } from './pages/sharing/ManageSharingPage'
+import { SharedReceiptsPage } from './pages/sharing/SharedReceiptsPage'
+import { SharedOwnerReceiptsPage } from './pages/sharing/SharedOwnerReceiptsPage'
+import { SharedReceiptSummaryPage } from './pages/sharing/SharedReceiptSummaryPage'
 
 function App() {
   return (
@@ -53,6 +57,38 @@ function App() {
         }
       />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route
+        path="/sharing"
+        element={
+          <ProtectedRoute>
+            <ManageSharingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/shared"
+        element={
+          <ProtectedRoute>
+            <SharedReceiptsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/shared/:ownerId"
+        element={
+          <ProtectedRoute>
+            <SharedOwnerReceiptsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/shared/:ownerId/:receiptId"
+        element={
+          <ProtectedRoute>
+            <SharedReceiptSummaryPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/change-password"
         element={

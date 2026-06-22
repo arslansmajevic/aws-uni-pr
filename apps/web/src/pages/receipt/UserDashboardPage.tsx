@@ -180,6 +180,8 @@ export function UserDashboardPage() {
 					</div>
 					<div className="d-flex flex-wrap gap-3">
 						<Link to="/upload" className="btn btn-primary">Upload receipts</Link>
+						<Link to="/shared" className="btn btn-outline-primary">Shared with me</Link>
+						<Link to="/sharing" className="btn btn-outline-primary">Manage sharing</Link>
 						<Link to="/user" className="btn btn-outline-secondary">User profile</Link>
 					</div>
 				</div>

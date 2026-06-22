@@ -23,7 +23,9 @@
         },
         "url": {
           "raw": "{{backendUrl}}register",
-          "host": ["{{backendUrl}}register"]
+          "host": [
+            "{{backendUrl}}register"
+          ]
         }
       },
       "response": []
@@ -44,7 +46,9 @@
         },
         "url": {
           "raw": "{{backendUrl}}refresh",
-          "host": ["{{backendUrl}}refresh"]
+          "host": [
+            "{{backendUrl}}refresh"
+          ]
         }
       },
       "response": []
@@ -65,7 +69,9 @@
         },
         "url": {
           "raw": "{{backendUrl}}login",
-          "host": ["{{backendUrl}}login"]
+          "host": [
+            "{{backendUrl}}login"
+          ]
         }
       },
       "response": []
@@ -83,7 +89,9 @@
         ],
         "url": {
           "raw": "{{backendUrl}}users",
-          "host": ["{{backendUrl}}users"]
+          "host": [
+            "{{backendUrl}}users"
+          ]
         }
       },
       "response": []
@@ -118,7 +126,9 @@
         },
         "url": {
           "raw": "{{backendUrl}}image",
-          "host": ["{{backendUrl}}image"]
+          "host": [
+            "{{backendUrl}}image"
+          ]
         }
       },
       "response": []
@@ -136,7 +146,9 @@
         ],
         "url": {
           "raw": "{{backendUrl}}receipts",
-          "host": ["{{backendUrl}}receipts"]
+          "host": [
+            "{{backendUrl}}receipts"
+          ]
         }
       },
       "response": []
@@ -163,8 +175,12 @@
         },
         "url": {
           "raw": "{{backendUrl}}bank/exchange",
-          "host": ["{{backendUrl}}bank"],
-          "path": ["exchange"]
+          "host": [
+            "{{backendUrl}}bank"
+          ],
+          "path": [
+            "exchange"
+          ]
         }
       },
       "response": []
@@ -192,8 +208,16 @@
         "url": {
           "raw": "https://sandbox.plaid.com/sandbox/public_token/create",
           "protocol": "https",
-          "host": ["sandbox", "plaid", "com"],
-          "path": ["sandbox", "public_token", "create"]
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "sandbox",
+            "public_token",
+            "create"
+          ]
         }
       },
       "response": []
@@ -221,8 +245,16 @@
         "url": {
           "raw": "https://sandbox.plaid.com/sandbox/public_token/create",
           "protocol": "https",
-          "host": ["sandbox", "plaid", "com"],
-          "path": ["sandbox", "public_token", "create"]
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "sandbox",
+            "public_token",
+            "create"
+          ]
         }
       },
       "response": []
@@ -250,8 +282,16 @@
         "url": {
           "raw": "https://sandbox.plaid.com/item/public_token/exchange",
           "protocol": "https",
-          "host": ["sandbox", "plaid", "com"],
-          "path": ["item", "public_token", "exchange"]
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "item",
+            "public_token",
+            "exchange"
+          ]
         }
       },
       "response": []
@@ -279,8 +319,16 @@
         "url": {
           "raw": "https://sandbox.plaid.com/sandbox/transactions/create",
           "protocol": "https",
-          "host": ["sandbox", "plaid", "com"],
-          "path": ["sandbox", "transactions", "create"]
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "sandbox",
+            "transactions",
+            "create"
+          ]
         }
       },
       "response": []
@@ -308,8 +356,15 @@
         "url": {
           "raw": "https://sandbox.plaid.com/transactions/get",
           "protocol": "https",
-          "host": ["sandbox", "plaid", "com"],
-          "path": ["transactions", "get"]
+          "host": [
+            "sandbox",
+            "plaid",
+            "com"
+          ],
+          "path": [
+            "transactions",
+            "get"
+          ]
         }
       },
       "response": []
@@ -329,6 +384,135 @@
         "header": []
       },
       "response": []
+    },
+    {
+      "name": "Add Share",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"viewerId\": \"<cognito-sub>\",\n    \"viewerEmail\": \"viewer@example.com\",\n    \"viewerName\": \"Viewer Name\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{backendUrl}}shares",
+          "host": [
+            "{{backendUrl}}shares"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "List Shares",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{backendUrl}}shares",
+          "host": [
+            "{{backendUrl}}shares"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Remove Share",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{backendUrl}}shares/<viewerId>",
+          "host": [
+            "{{backendUrl}}shares/<viewerId>"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Shared With Me",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{backendUrl}}shared-with-me",
+          "host": [
+            "{{backendUrl}}shared-with-me"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Shared Receipts",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{backendUrl}}shared/<ownerId>/receipts",
+          "host": [
+            "{{backendUrl}}shared/<ownerId>/receipts"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Shared Receipt Summary",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{backendUrl}}shared/<ownerId>/receipts/<receiptId>",
+          "host": [
+            "{{backendUrl}}shared/<ownerId>/receipts/<receiptId>"
+          ]
+        }
+      },
+      "response": []
     }
   ],
   "event": [
@@ -338,7 +522,9 @@
         "type": "text/javascript",
         "packages": {},
         "requests": {},
-        "exec": [""]
+        "exec": [
+          ""
+        ]
       }
     },
     {
@@ -347,7 +533,9 @@
         "type": "text/javascript",
         "packages": {},
         "requests": {},
-        "exec": [""]
+        "exec": [
+          ""
+        ]
       }
     }
   ],
