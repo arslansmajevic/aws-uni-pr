@@ -9,43 +9,9 @@ export class BankingConstruct extends Construct {
   public readonly exchangeTokenLambda: Function;
   public readonly disconnectBankLambda: Function;
   public readonly getBankStatusLambda: Function;
-  public readonly savePlaidTokenLambda: Function;
-  public readonly savePlaidCredentialsLambda: Function;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
-
-    this.savePlaidCredentialsLambda = new Function(this, "SavePlaidCredentialsLambda", {
-      runtime: Runtime.PYTHON_3_12,
-      handler: "savePlaidCredentials.handler",
-      code: Code.fromAsset(path.join(__dirname, "lambdas")),
-    });
-
-    this.savePlaidCredentialsLambda.addToRolePolicy(new PolicyStatement({
-      actions: [
-        "secretsmanager:CreateSecret",
-        "secretsmanager:UpdateSecret",
-      ],
-      resources: [
-        `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:plaid/credentials/*`,
-      ],
-    }));
-
-    this.savePlaidTokenLambda = new Function(this, "SavePlaidTokenLambda", {
-      runtime: Runtime.PYTHON_3_12,
-      handler: "savePlaidToken.handler",
-      code: Code.fromAsset(path.join(__dirname, "lambdas")),
-    });
-
-    this.savePlaidTokenLambda.addToRolePolicy(new PolicyStatement({
-      actions: [
-        "secretsmanager:CreateSecret",
-        "secretsmanager:UpdateSecret",
-      ],
-      resources: [
-        `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:plaid/access-token/*`,
-      ],
-    }));
 
     this.createLinkTokenLambda = new Function(this, "CreateLinkTokenLambda", {
       runtime: Runtime.PYTHON_3_12,
