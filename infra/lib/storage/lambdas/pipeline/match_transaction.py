@@ -32,7 +32,7 @@ secrets = boto3.client("secretsmanager")
 # Amount tolerance (absolute, in the receipt currency) and the number of days
 # on either side of the receipt date we are willing to consider a match.
 AMOUNT_TOLERANCE = 0.02
-MAX_DAY_DIFF = 3
+MAX_DAY_DIFF = 365
 
 PLAID_URLS = {
     "sandbox": "https://sandbox.plaid.com",
@@ -43,6 +43,13 @@ PLAID_URLS = {
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
+def _log_debug_info(user_id, receipt_id, info_string):
+    table.update_item(
+        Key={"userId": user_id, "receiptId": receipt_id},
+        UpdateExpression="SET #d = :val",
+        ExpressionAttributeNames={"#d": "debugInfo"},
+        ExpressionAttributeValues={":val": info_string}
+    )
 
 def _to_float(value):
     if value is None:
@@ -104,6 +111,7 @@ def find_matching_transaction(
     best_score = None
     for txn in transactions or []:
         amount = transaction_amount(txn)
+        
         if amount is None:
             continue
         amount_gap = abs(amount - target_amount)
@@ -258,34 +266,28 @@ def handler(event, context):
 
     status = "NO_MATCH"
     matched = None
+    _log_debug_info(user_id, receipt_id, "STARTING_MATCH")
     try:
-        user_creds = _get_user_credentials(user_id)
-        access_token = None
-
-        if user_creds:
-            # Preferred flow: authenticate with the user's own credentials and
-            # derive an access token to query their transactions.
-            creds = user_creds
-            access_token = _create_access_token(user_creds)
-        else:
-            # Fallback: a directly-registered access token plus shared creds.
-            access_token = _get_access_token(user_id)
-            creds = _get_plaid_creds() if access_token else None
-
+        access_token = _get_access_token(user_id)
+        
         if not access_token:
             print(f"[Match] No Plaid connection for user {user_id}; skipping match.")
             _record_match(user_id, receipt_id, "NO_BANK_CONNECTION")
             event["transactionMatchStatus"] = "NO_BANK_CONNECTION"
             return event
 
+        # Get the global developer Plaid credentials
+        creds = _get_plaid_creds()
+
         receipt = _load_receipt(user_id, receipt_id) or {}
+        debug_start = f"Loaded receipt. Amount={receipt.get('totalAmount')}, Date={receipt.get('receiptDate')}"
+        _log_debug_info(user_id, receipt_id, debug_start)
         target_amount = _to_float(receipt.get("totalAmount"))
         receipt_date = receipt.get("receiptDate")
+        print(f"[DEBUG] Target amount={target_amount}, date={receipt_date}")
 
         if target_amount is None or not receipt_date:
-            print(
-                f"[Match] Receipt {receipt_id} missing amount/date; cannot match."
-            )
+            print(f"[Match] Receipt {receipt_id} missing amount/date; cannot match.")
             _record_match(user_id, receipt_id, "INSUFFICIENT_DATA")
             event["transactionMatchStatus"] = "INSUFFICIENT_DATA"
             return event
@@ -294,13 +296,11 @@ def handler(event, context):
         start_date = (center - timedelta(days=MAX_DAY_DIFF)).strftime("%Y-%m-%d")
         end_date = (center + timedelta(days=MAX_DAY_DIFF)).strftime("%Y-%m-%d")
 
-        transactions = _fetch_transactions(
-            creds, access_token, start_date, end_date
-        )
-
-        matched = find_matching_transaction(
-            transactions, target_amount, receipt_date
-        )
+        transactions = _fetch_transactions(creds, access_token, start_date, end_date)
+        debug_msg = f"Look {target_amount} for {receipt_date}. Plaid returned: {len(transactions)} transactions. First: {transactions[0]['amount'] if transactions else 'N/A'}"
+        _log_debug_info(user_id, receipt_id, debug_msg)
+        matched = find_matching_transaction(transactions, target_amount, receipt_date)
+        print(f"[Match] Receipt {receipt_id} matched transaction: {matched}")
         status = "MATCHED" if matched else "NO_MATCH"
         _record_match(user_id, receipt_id, status, matched)
 

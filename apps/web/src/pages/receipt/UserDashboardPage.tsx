@@ -157,9 +157,11 @@ export function UserDashboardPage() {
 	const processingReceipts = receipts.filter(r => r.processingStatus === 'PROCESSING').length
 	
 	const matchedCount = receipts.filter(r => r.transactionMatchStatus === 'MATCHED').length
-	const possibleMatchCount = receipts.filter(r => r.transactionMatchStatus === 'POSSIBLE_MATCH').length
-	const unmatchedCount = receipts.filter(r => r.transactionMatchStatus === 'UNMATCHED').length
-	const totalEvaluated = matchedCount + possibleMatchCount + unmatchedCount
+	const insufficientDataCount = receipts.filter(r => r.transactionMatchStatus === 'INSUFFICIENT_DATA').length
+	const noMatchCount = receipts.filter(r => ['UNMATCHED', 'NO_MATCH', 'ERROR'].includes(r.transactionMatchStatus)).length
+	const noBankCount = receipts.filter(r => r.transactionMatchStatus === 'NO_BANK_CONNECTION').length
+	
+	const totalEvaluated = matchedCount + insufficientDataCount + noMatchCount
 	const matchRate = totalEvaluated > 0 ? ((matchedCount / totalEvaluated) * 100).toFixed(0) : '0'
 
 	if (isLoading) {
@@ -239,8 +241,14 @@ export function UserDashboardPage() {
 													<span className="badge text-bg-info text-dark">
 													{item.category || 'Other'}
 													</span>
-													<span className={`badge ${item.transactionMatchStatus === 'MATCHED' ? 'text-bg-success' : 'text-bg-secondary'}`}>
-													{item.transactionMatchStatus || 'PENDING'}
+													<span className={`badge ${
+														item.transactionMatchStatus === 'MATCHED' ? 'text-bg-success' : 
+														item.transactionMatchStatus === 'INSUFFICIENT_DATA' ? 'text-bg-warning text-dark' : 
+														item.transactionMatchStatus === 'NO_BANK_CONNECTION' ? 'text-bg-secondary' : 
+														(item.transactionMatchStatus === 'NO_MATCH' || item.transactionMatchStatus === 'UNMATCHED') ? 'text-bg-danger' :
+														'text-bg-light text-secondary border'
+													}`}>
+														{item.transactionMatchStatus === 'UNMATCHED' ? 'NO_MATCH' : (item.transactionMatchStatus || 'PENDING')}
 													</span>
 													<span className="badge text-bg-dark fs-6">
 													{item.totalAmount ? `$${item.totalAmount}` : '$-.--'}
@@ -318,17 +326,23 @@ export function UserDashboardPage() {
 
 							<div className="d-grid gap-2 small">
 								<div className="d-flex justify-content-between p-2 rounded-2 bg-light">
-									<span className="text-success fw-semibold">✓ Fully Matched</span>
+									<span className="text-success fw-semibold">✓ Matched</span>
 									<span className="badge text-bg-success">{matchedCount}</span>
 								</div>
 								<div className="d-flex justify-content-between p-2 rounded-2 bg-light">
-									<span className="text-warning fw-semibold">⚠ Possible Matches</span>
-									<span className="badge text-bg-warning text-dark">{possibleMatchCount}</span>
+									<span className="text-warning fw-semibold">⚠ Insufficient Data</span>
+									<span className="badge text-bg-warning text-dark">{insufficientDataCount}</span>
 								</div>
 								<div className="d-flex justify-content-between p-2 rounded-2 bg-light">
-									<span className="text-danger fw-semibold">✗ Unmatched / Missing</span>
-									<span className="badge text-bg-danger">{unmatchedCount}</span>
+									<span className="text-danger fw-semibold">✗ No Match</span>
+									<span className="badge text-bg-danger">{noMatchCount}</span>
 								</div>
+								{noBankCount > 0 && (
+									<div className="d-flex justify-content-between p-2 rounded-2 bg-light">
+										<span className="text-secondary fw-semibold">ℹ No Bank Linked</span>
+										<span className="badge text-bg-secondary">{noBankCount}</span>
+									</div>
+								)}
 							</div>
 						</div>
 
